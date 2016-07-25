@@ -1,0 +1,12 @@
+uwsgi:
+    plugin: python3.4
+    virtualenv: /home/user/.virtualenvs/lopocs
+    master: true
+    socket: localhost:5000
+    module: lightpcss.wsgi:app
+    processes: 1
+    enable-threads: true
+    protocol: http
+    need-app: true
+    catch: exceptions=true
+    env: LIGHTPCSS_SETTINGS=/home/user/lightpcss/conf/lopocs.yml

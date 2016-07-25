@@ -1,0 +1,5 @@
+flask
+flask-restplus
+pyyaml
+psycopg2
+pygdal

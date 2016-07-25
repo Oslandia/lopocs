@@ -1,0 +1,4 @@
+flask:
+    DEBUG: True
+    LOG_LEVEL: debug
+    RESOURCE : "/resource"
