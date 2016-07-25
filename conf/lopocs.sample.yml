@@ -1,4 +1,10 @@
 flask:
     DEBUG: True
     LOG_LEVEL: debug
-    RESOURCE : "/resource"
+    PG_HOST: localhost
+    PG_NAME: db
+    PG_PORT: 5432
+    PG_USER: user
+    PG_PASSWORD:
+    PG_COLUMN: pa
+    PG_TABLE: pa
