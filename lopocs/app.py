@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from flask import request
-from flask.ext.restplus import Api, Resource, fields, reqparse
+from flask_restplus import Api, Resource, fields, reqparse
 
 from .database import Session
 from . import greyhound
