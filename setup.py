@@ -4,7 +4,7 @@ import re
 from setuptools import setup, find_packages
 import subprocess
 
-GDAL_VERSION = subprocess.check_output(['gdal-config', '--version']).strip()
+GDAL_VERSION = subprocess.check_output(['gdal-config', '--version']).strip().decode()
 
 here = os.path.abspath(os.path.dirname(__file__))
 
