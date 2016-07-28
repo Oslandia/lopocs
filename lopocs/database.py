@@ -24,6 +24,17 @@ class Session():
     # FIXME: handle disconnection
     """
     db = None
+    bb = None
+
+    @classmethod
+    def set_boundingbox(cls, l):
+        cls.bb = {}
+        cls.bb['xmin'] = l[0]
+        cls.bb['ymin'] = l[1]
+        cls.bb['zmin'] = l[2]
+        cls.bb['xmax'] = l[3]
+        cls.bb['ymax'] = l[4]
+        cls.bb['zmax'] = l[5]
 
     @classmethod
     #@timing
@@ -63,6 +74,9 @@ class Session():
     @classmethod
     #@timing
     def boundingbox2(cls):
+        if ( cls.bb ):
+            return cls.bb
+
         bb = cls.query_aslist(
                 "SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"
                 .format(cls.column, cls.table))[0]

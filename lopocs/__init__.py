@@ -115,5 +115,7 @@ def create_app(env='Defaults'):
     # load extensions
     api.init_app(app)
     Session.init_app(app)
+    if 'BB' in app.config:
+        Session.set_boundingbox(app.config['BB'])
 
     return app
