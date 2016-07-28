@@ -9,8 +9,14 @@ from .utils import GreyhoundReadSchema, GreyhoundInfoSchema
 class GreyhoundInfo(object):
 
     def run(self):
-        box = Session.boundingbox()
-        npoints = Session.numpoints()
+        # a little faster than boundingbox()
+        # box = Session.boundingbox()
+        box = Session.boundingbox2()
+
+        # approximate but far faster than Session.numpoints()
+        # npoints = Session.numpoints()
+        npoints = Session.approx_row_count() * Session.patch_size()
+
         srs = Session.srs()
         schema_json = GreyhoundInfoSchema().json()
 

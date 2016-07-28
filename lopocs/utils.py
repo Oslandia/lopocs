@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import re
 import decimal
 
 # -----------------------------------------------------------------------------
@@ -29,6 +30,20 @@ def boundingbox_to_polygon(box):
     boxstr = ("{0} {1}, {2} {3}, {4} {5}, {6} {7}, {0} {1}"
         .format(box[0], box[1], box[3], box[1], box[3], box[4], box[0], box[4]))
     return boxstr
+
+def list_from_str_box( box_str ):
+    """
+    Transform a string 'BOX(xmin, ymin, xmax, ymax)' to
+    a list [xmin, ymin, xmin, xmax]
+    """
+
+    box_str = box_str.replace('BOX', '')
+    box_str = box_str.replace('(', '')
+    box_str = box_str.replace(')', '')
+    box_str = box_str.replace(' ', ',')
+
+    l = [float(x) for x in box_str.split(',')]
+    return l
 
 # -----------------------------------------------------------------------------
 # class

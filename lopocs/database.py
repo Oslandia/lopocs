@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
+import time
 from itertools import chain
 from psycopg2 import connect
 from psycopg2.extras import NamedTupleCursor
 from osgeo.osr import SpatialReference
 
 from .pgpointcloud import PgPointCloud
+from . import utils
+
+def timing(f):
+    def wrap(*args):
+        t1 = time.time()
+        ret = f(*args)
+        t2 = time.time()
+        print('function took %0.3f ms' % ((t2-t1)*1000.0))
+        return ret
+    return wrap
 
 class Session():
     """
@@ -15,12 +26,29 @@ class Session():
     db = None
 
     @classmethod
+    #@timing
+    def approx_row_count(cls):
+        return cls.query_aslist(
+                "SELECT reltuples ::BIGINT AS approximate_row_count "
+                "FROM pg_class WHERE relname = '{0}';"
+                .format(cls.table))[0]
+
+    @classmethod
+    #@timing
+    def patch_size(cls):
+        return cls.query_aslist(
+                "select sum(pc_numpoints({0})) from {1} where id =1"
+                .format(cls.column, cls.table))[0]
+
+    @classmethod
+    #@timing
     def numpoints(cls):
         return cls.query_aslist(
             "select sum(pc_numpoints({0})) from {1}"
             .format(cls.column, cls.table))[0]
 
     @classmethod
+    #@timing
     def boundingbox(cls):
         return cls.query_asdict(
             "select min(pc_patchmin({0}, 'x')) as xmin"
@@ -33,12 +61,38 @@ class Session():
             .format(cls.column, cls.table))[0]
 
     @classmethod
+    #@timing
+    def boundingbox2(cls):
+        bb = cls.query_aslist(
+                "SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"
+                .format(cls.column, cls.table))[0]
+        bb_xy = utils.list_from_str_box(bb)
+
+        bb_z = cls.query_asdict(
+            "select "
+            "min(pc_patchmin({0}, 'z')) as zmin"
+            ",max(pc_patchmax({0}, 'z')) as zmax"
+            " from {1}"
+            .format(cls.column, cls.table))[0]
+
+        bb = {}
+        bb['xmin'] = bb_xy[0]
+        bb['ymin'] = bb_xy[1]
+        bb['zmin'] = bb_z['zmin']
+        bb['xmax'] = bb_xy[2]
+        bb['ymax'] = bb_xy[3]
+        bb['zmax'] = bb_z['zmax']
+
+        return bb
+
+    @classmethod
     def srsid(cls):
         return cls.query_aslist(
             "select pc_summary({0})::json->'srid' as srsid from {1} where id = 1"
             .format(cls.column, cls.table))[0]
 
     @classmethod
+    #@timing
     def srs(cls):
         sr = SpatialReference()
         sr.ImportFromEPSG( cls.srsid() )
