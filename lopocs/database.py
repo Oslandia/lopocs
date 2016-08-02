@@ -39,10 +39,15 @@ class Session():
     @classmethod
     #@timing
     def approx_row_count(cls):
+        if '.' in cls.table:
+            schema, table = cls.table.split('.')
+        else:
+            table, schema = cls.table, 'public'
         return cls.query_aslist(
-                "SELECT reltuples ::BIGINT AS approximate_row_count "
-                "FROM pg_class WHERE relname = '{0}';"
-                .format(cls.table))[0]
+                """SELECT reltuples ::BIGINT AS approximate_row_count
+                FROM pg_class JOIN pg_catalog.pg_namespace n ON n.oid = pg_class.relnamespace
+		WHERE relname = '{0}' and nspname = '{1}'
+                """.format(table, schema))[0]
 
     @classmethod
     #@timing
