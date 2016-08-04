@@ -96,11 +96,12 @@ class PgPointCloud(object):
             end = end + pow(4,i)
 
         # build sql query
-        sql = ("select pc_get(pc_explode(pc_range({0}, {4}, {5}))) from {1} "
+        sql = ("select pc_get(pc_explode(pc_filterbetween( pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))) from {1} "
             "where pc_intersects({0}, st_geomfromtext('polygon (("
             "{2}))',{3}));"
             .format(self.session.column, self.session.table,
-                    poly, self.session.srsid(), beg, end-beg))
+                    poly, self.session.srsid(), beg, end-beg,
+                    box[2], box[5]))
 
         points = self.session.query_aslist(sql)
         hexbuffer = self._prepare_for_potree(points, offset, scale)
