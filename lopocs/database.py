@@ -7,6 +7,7 @@ from osgeo.osr import SpatialReference
 
 from .pgpointcloud import PgPointCloud
 from . import utils
+from .conf import Config
 
 def timing(f):
     def wrap(*args):
@@ -24,17 +25,6 @@ class Session():
     # FIXME: handle disconnection
     """
     db = None
-    bb = None
-
-    @classmethod
-    def set_boundingbox(cls, l):
-        cls.bb = {}
-        cls.bb['xmin'] = l[0]
-        cls.bb['ymin'] = l[1]
-        cls.bb['zmin'] = l[2]
-        cls.bb['xmax'] = l[3]
-        cls.bb['ymax'] = l[4]
-        cls.bb['zmax'] = l[5]
 
     @classmethod
     #@timing
@@ -66,6 +56,9 @@ class Session():
     @classmethod
     #@timing
     def boundingbox(cls):
+        if ( Config.BB ):
+            return Config.BB
+
         return cls.query_asdict(
             "select min(pc_patchmin({0}, 'x')) as xmin"
             ",max(pc_patchmax({0}, 'x')) as xmax"
@@ -79,8 +72,11 @@ class Session():
     @classmethod
     #@timing
     def boundingbox2(cls):
-        if ( cls.bb ):
-            return cls.bb
+        """
+        Faster than boundingbox method
+        """
+        if ( Config.BB ):
+            return Config.BB
 
         bb = cls.query_aslist(
                 "SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"

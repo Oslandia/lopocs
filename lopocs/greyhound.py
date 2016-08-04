@@ -5,6 +5,7 @@ from flask import Response
 from .database import Session
 from .utils import Dimension, Schema, decimal_default, list_from_str
 from .utils import GreyhoundReadSchema, GreyhoundInfoSchema
+from .conf import Config
 
 class GreyhoundInfo(object):
 
@@ -46,7 +47,7 @@ class GreyhoundRead(object):
         box = list_from_str(args['bounds'])
 
         read = Session.get_points(box, GreyhoundReadSchema().dims, offset,
-            args['scale'], args['depthEnd'])
+            args['scale'], args['depthEnd'] - Config.DEPTH + 1)
 
         resp = Response(read)
         resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -56,7 +57,7 @@ class GreyhoundRead(object):
 class GreyhoundHierarchy(object):
 
     def run(self):
-        resp = Response(json.dumps(self.fake_hierarchy(0, 6)))
+        resp = Response(json.dumps(self.fake_hierarchy(0, Config.DEPTH)))
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
         return resp
@@ -66,7 +67,7 @@ class GreyhoundHierarchy(object):
         begin = begin + 1
 
         if begin != end:
-            p['n'] = 500000
+            p['n'] = 500*1000
 
             if begin != (end-1):
                 p['nwu'] = self.fake_hierarchy(begin, end)

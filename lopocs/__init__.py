@@ -10,6 +10,7 @@ from yaml import load as yload
 
 from lopocs.app import api
 from lopocs.database import Session
+from lopocs.conf import Config
 
 # lopocs version
 __version__ = '0.1.dev0'
@@ -115,7 +116,6 @@ def create_app(env='Defaults'):
     # load extensions
     api.init_app(app)
     Session.init_app(app)
-    if 'BB' in app.config:
-        Session.set_boundingbox(app.config['BB'])
+    Config.init(app.config)
 
     return app
