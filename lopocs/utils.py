@@ -66,7 +66,7 @@ class Schema(object):
 
     def dim_position(self, name):
         for idx, d in enumerate(self.dims):
-            if d.name == name or d.name == name.upper():
+            if d.name == name or d.name == name.upper() or d.name == name.title():
                 return idx
         return None
 
@@ -78,6 +78,18 @@ class Schema(object):
 
     def z_position(self):
         return self.dim_position('z')
+
+    def red_position(self):
+        return self.dim_position('red')
+
+    def green_position(self):
+        return self.dim_position('green')
+
+    def blue_position(self):
+        return self.dim_position('blue')
+
+    def classification_position(self):
+        return self.dim_position('classification')
 
 class Dimension(object):
 

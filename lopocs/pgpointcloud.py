@@ -4,6 +4,7 @@ import codecs
 import binascii
 import json
 import numpy
+import random
 
 from lazperf import Compressor, buildNumpyDescription
 from . import utils
@@ -19,38 +20,46 @@ class PgPointCloud(object):
         buff = bytearray()
         n = -1
 
+        print("LOD: ", lod)
+        print("DEPTH: ", Config.DEPTH)
+
         if lod < Config.DEPTH:
             [n, buff] = self.__get_points_method2(box, dims, offsets, scale, lod)
+            #[n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
 
         print("NUM POINTS RETURNED: ", n)
 
         return buff
 
-    #def get_pointn(self, n, box, dims, offset, scale):
+    def get_pointn(self, n, box, dims, offset, scale):
 
-    #    points = []
-    #    hexbuffer = bytearray()
+        points = []
+        hexbuffer = bytearray()
 
-    #    try:
-    #        # build params
-    #        poly = utils.boundingbox_to_polygon(box)
+        try:
+            # build params
+            poly = utils.boundingbox_to_polygon(box)
 
-    #        # build sql query
-    #        sql = ("select pc_get(pc_pointn({0}, {1})) as pt from {2} "
-    #            "where pc_intersects({0}, st_geomfromtext('polygon (("
-    #            "{3}))',{4}));"
-    #            .format(self.session.column, n, self.session.table,
-    #                    poly, self.session.srsid()))
+            # build sql query
+            sql = ("select pc_get(pc_explode(pc_range({0}, {1}, 1))) as pt from {2} "
+                "where pc_intersects({0}, st_geomfromtext('polygon (("
+                "{3}))',{4}));"
+                .format(self.session.column, n, self.session.table,
+                        poly, self.session.srsid()))
 
-    #        # run the database
-    #        points = self.session.query_aslist(sql)
+            print(sql)
 
-    #        hexbuffer = self._prepare_for_potree(points, offset, scale)
-    #    except:
-    #        points = []
-    #        hexbuffer.extend(self.__hexa_signed_int32(0))
+            # run the database
+            points = self.session.query_aslist(sql)
 
-    #    return [len(points), hexbuffer]
+            print(points)
+
+            hexbuffer = self._prepare_for_potree(points, offset, scale)
+        except:
+            points = []
+            hexbuffer.extend(self.__hexa_signed_int32(0))
+
+        return [len(points), hexbuffer]
 
     #def __get_points_method0(self, box, dims, offset, scale, lod):
 
@@ -78,9 +87,9 @@ class PgPointCloud(object):
 
     #    return [len(points), hexbuffer]
 
-    #def __get_points_method1(self, box, dims, offsets, scale, lod):
-    #    n = random.randint(0, 400)
-    #    return self.get_pointn(n, box, dims, offsets, scale)
+    def __get_points_method1(self, box, dims, offsets, scale, lod):
+        n = random.randint(0, 400)
+        return self.get_pointn(n, box, dims, offsets, scale)
 
     def __get_points_method2(self, box, dims, offset, scale, lod):
         # build params
@@ -133,6 +142,10 @@ class PgPointCloud(object):
         xpos = schema.x_position()
         ypos = schema.y_position()
         zpos = schema.z_position()
+        red_pos = schema.red_position()
+        green_pos = schema.green_position()
+        blue_pos = schema.blue_position()
+        classif_pos = schema.classification_position()
 
         # update data with offset and scale
         scaled_points = []
@@ -142,39 +155,14 @@ class PgPointCloud(object):
             scaled_point.y = int((pt[ypos] - offset[1]) / scale)
             scaled_point.z = int((pt[zpos] - offset[2]) / scale)
 
-            #print("----------------------------------------------")
-            #print("x: ", pt[xpos], " scale_x: ", scaled_point.x, ", offset: ", offset[0])
-            #print("y: ", pt[ypos], " scale_y: ", scaled_point.y, ", offset: ", offset[1])
-            #print("z: ", pt[zpos], " scale_z: ", scaled_point.z, ", offset: ", offset[2])
+            if red_pos and green_pos and blue_pos:
+                scaled_point.red = int(pt[red_pos]) % 255
+                scaled_point.green = int(pt[green_pos]) % 255
+                scaled_point.blue = int(pt[blue_pos]) % 255
 
-            scaled_point.red = 0
-            scaled_point.green = 0
-            scaled_point.blue = 0
+            if classif_pos:
+                scaled_point.classification = int(pt[classif_pos])
 
-            if self.lod == 9:
-                scaled_point.red = 255
-                scaled_point.green = 255
-                scaled_point.blue = 255
-            elif self.lod == 10:
-                scaled_point.red = 0
-                scaled_point.green = 255
-                scaled_point.blue = 255
-            elif self.lod == 11:
-                scaled_point.red = 255
-                scaled_point.green = 0
-                scaled_point.blue = 255
-            elif self.lod == 12:
-                scaled_point.red = 255
-                scaled_point.green = 255
-                scaled_point.blue = 0
-            elif self.lod == 13:
-                scaled_point.red = 255
-                scaled_point.green = 0
-                scaled_point.blue = 0
-            elif self.lod == 14:
-                scaled_point.red = 0
-                scaled_point.green = 255
-                scaled_point.blue = 0
             scaled_points.append( scaled_point )
 
         # build a buffer with hexadecimal data
