@@ -5,7 +5,7 @@ import sys
 import logging
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, Blueprint
 from yaml import load as yload
 
 from lopocs.app import api
@@ -114,7 +114,13 @@ def create_app(env='Defaults'):
     logger.debug('loading config from {}'.format(cfgfile))
 
     # load extensions
-    api.init_app(app)
+    if 'URL_PREFIX' in app.config:
+        blueprint = Blueprint('api', __name__, url_prefix=app.config['URL_PREFIX'])
+    else:
+        blueprint = Blueprint('api', __name__)
+
+    api.init_app(blueprint)
+    app.register_blueprint(blueprint)
     Session.init_app(app)
     Config.init(app.config)
 

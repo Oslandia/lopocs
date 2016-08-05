@@ -5,6 +5,8 @@ from setuptools import setup, find_packages
 import subprocess
 
 GDAL_VERSION = subprocess.check_output(['gdal-config', '--version']).strip().decode()
+# keep minor version only
+GDAL_VERSION = GDAL_VERSION[:GDAL_VERSION.rfind('.')]
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,7 +39,6 @@ prod_requirements = (
 
 
 def find_version(*file_paths):
-
     """
     see https://github.com/pypa/sampleproject/blob/master/setup.py
     """
