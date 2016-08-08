@@ -4,6 +4,7 @@ class Config(object):
 
     BB = None
     DEPTH = 6
+    METHOD = None # random / midoc
 
     @classmethod
     def init(cls, config):
@@ -20,3 +21,6 @@ class Config(object):
 
         if 'DEPTH' in config:
             cls.DEPTH = config['DEPTH']
+
+        if 'METHOD' in config:
+            cls.METHOD = config['METHOD']

@@ -23,9 +23,14 @@ class PgPointCloud(object):
         print("LOD: ", lod)
         print("DEPTH: ", Config.DEPTH)
 
-        if lod < Config.DEPTH:
-            [n, buff] = self.__get_points_method2(box, dims, offsets, scale, lod)
-            #[n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
+        if Config.METHOD:
+            if Config.METHOD == "random":
+                [n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
+            elif Config.METHOD == "midoc":
+                if lod < Config.DEPTH:
+                    [n, buff] = self.__get_points_method2(box, dims, offsets, scale, lod)
+        else:
+            [n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
 
         print("NUM POINTS RETURNED: ", n)
 
@@ -52,7 +57,7 @@ class PgPointCloud(object):
             # run the database
             points = self.session.query_aslist(sql)
 
-            print(points)
+            #print(points)
 
             hexbuffer = self._prepare_for_potree(points, offset, scale)
         except:
@@ -114,6 +119,8 @@ class PgPointCloud(object):
 
         points = self.session.query_aslist(sql)
         hexbuffer = self._prepare_for_potree(points, offset, scale)
+
+        print(sql)
 
         return [len(points), hexbuffer]
 
