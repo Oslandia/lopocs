@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 from struct import pack
-import codecs
-import binascii
 import json
 import numpy
 import random
@@ -14,7 +12,6 @@ class PgPointCloud(object):
 
     def __init__(self, session):
         self.session = session
-        self.lod = 0
 
     def get_points(self, box, dims, offsets, scale, lod):
         buff = bytearray()
@@ -66,78 +63,56 @@ class PgPointCloud(object):
 
         return [len(points), hexbuffer]
 
-    #def __get_points_method0(self, box, dims, offset, scale, lod):
-
-    #    points = []
-    #    hexbuffer = bytearray()
-
-    #    try:
-    #        # build params
-    #        poly = utils.boundingbox_to_polygon(box)
-
-    #        # build sql query
-    #        sql = ("select pc_get(pc_explode({0})) from {1} "
-    #            "where pc_intersects({0}, st_geomfromtext('polygon (("
-    #            "{2}))',{3}));"
-    #            .format(self.session.column, self.session.table,
-    #                    poly, self.session.srsid()))
-
-    #        # run the database
-    #        points = self.session.query_aslist(sql)
-
-    #        hexbuffer = self._prepare_for_potree(points, offset, scale)
-    #    except:
-    #        points = []
-    #        hexbuffer.extend(self.__hexa_signed_int32(0))
-
-    #    return [len(points), hexbuffer]
-
     def __get_points_method1(self, box, dims, offsets, scale, lod):
+        """
+        Randomly select 1 point in each patch within the bounding box.
+        """
+
         n = random.randint(0, 400)
         return self.get_pointn(n, box, dims, offsets, scale)
 
     def __get_points_method2(self, box, dims, offset, scale, lod):
+        """
+        Select n points in each patch within the bounding box
+        according to the LOD.
+        """
+
         # build params
         poly = utils.boundingbox_to_polygon(box)
 
         # range
         beg = 0
         for i in range(0, lod-1):
-            beg = beg + pow(4,i)
+            beg = beg + pow(4, i)
 
         end = 0
         for i in range(0, lod):
-            end = end + pow(4,i)
+            end = end + pow(4, i)
 
         # build sql query
-        sql = ("select pc_get(pc_explode(pc_filterbetween( pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))) from {1} "
-            "where pc_intersects({0}, st_geomfromtext('polygon (("
-            "{2}))',{3}));"
-            .format(self.session.column, self.session.table,
-                    poly, self.session.srsid(), beg, end-beg,
-                    box[2], box[5]))
+        sql = ("select pc_get(pc_explode(pc_filterbetween( "
+               "pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))) from {1} "
+               "where pc_intersects({0}, st_geomfromtext('polygon (("
+               "{2}))',{3}));"
+               .format(self.session.column, self.session.table,
+                       poly, self.session.srsid(), beg, end-beg,
+                       box[2], box[5]))
+
+        print(sql)
 
         points = self.session.query_aslist(sql)
         hexbuffer = self._prepare_for_potree(points, offset, scale)
 
-        print(sql)
-
         return [len(points), hexbuffer]
 
     def __hexa_signed_int32(self, val):
-        hex = pack('i', val)
-        c = codecs.encode(hex, 'hex').decode()
-        return binascii.unhexlify(c)
+        return pack('i', val)
 
     def __hexa_signed_uint16(self, val):
-        hex = pack('H', val)
-        c = codecs.encode(hex, 'hex').decode()
-        return binascii.unhexlify(c)
+        return pack('H', val)
 
     def __hexa_signed_uint8(self, val):
-        hex = pack('B', val)
-        c = codecs.encode(hex, 'hex').decode()
-        return binascii.unhexlify(c)
+        return pack('B', val)
 
     def _prepare_for_potree(self, points, offset, scale):
 
@@ -145,7 +120,7 @@ class PgPointCloud(object):
 
         # get pgpointcloud schema to retrieve x/y/z position
         schema = utils.Schema()
-        schema.parse_pgpointcloud_schema( self.session.schema() )
+        schema.parse_pgpointcloud_schema(self.session.schema())
         xpos = schema.x_position()
         ypos = schema.y_position()
         zpos = schema.z_position()
@@ -155,7 +130,6 @@ class PgPointCloud(object):
         classif_pos = schema.classification_position()
 
         # update data with offset and scale
-        scaled_points = []
         for pt in points:
             scaled_point = utils.Point()
             scaled_point.x = int((pt[xpos] - offset[0]) / scale)
@@ -170,18 +144,14 @@ class PgPointCloud(object):
             if classif_pos:
                 scaled_point.classification = int(pt[classif_pos])
 
-            scaled_points.append( scaled_point )
-
-        # build a buffer with hexadecimal data
-        for pt in scaled_points:
-            hexbuffer.extend(self.__hexa_signed_int32(pt.x))
-            hexbuffer.extend(self.__hexa_signed_int32(pt.y))
-            hexbuffer.extend(self.__hexa_signed_int32(pt.z))
-            hexbuffer.extend(self.__hexa_signed_uint16(pt.intensity))
-            hexbuffer.extend(self.__hexa_signed_uint8(pt.classification))
-            hexbuffer.extend(self.__hexa_signed_uint16(pt.red))
-            hexbuffer.extend(self.__hexa_signed_uint16(pt.green))
-            hexbuffer.extend(self.__hexa_signed_uint16(pt.blue))
+            hexbuffer.extend(self.__hexa_signed_int32(scaled_point.x))
+            hexbuffer.extend(self.__hexa_signed_int32(scaled_point.y))
+            hexbuffer.extend(self.__hexa_signed_int32(scaled_point.z))
+            hexbuffer.extend(self.__hexa_signed_uint16(scaled_point.intensity))
+            hexbuffer.extend(self.__hexa_signed_uint8(scaled_point.classification))
+            hexbuffer.extend(self.__hexa_signed_uint16(scaled_point.red))
+            hexbuffer.extend(self.__hexa_signed_uint16(scaled_point.green))
+            hexbuffer.extend(self.__hexa_signed_uint16(scaled_point.blue))
 
         # compress with laz
         s = json.dumps(utils.GreyhoundReadSchema().json()).replace("\\","")
@@ -198,6 +168,6 @@ class PgPointCloud(object):
         #decompressed_str = numpy.ndarray.tostring( decompressed )
 
         # add nomber of points as footer
-        hexbuffer.extend(self.__hexa_signed_int32(len(scaled_points)))
+        hexbuffer.extend(self.__hexa_signed_int32(len(points)))
 
         return hexbuffer
