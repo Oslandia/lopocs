@@ -128,6 +128,7 @@ class PgPointCloud(object):
         green_pos = schema.green_position()
         blue_pos = schema.blue_position()
         classif_pos = schema.classification_position()
+        intensity_pos = schema.intensity_position()
 
         # update data with offset and scale
         for pt in points:
@@ -135,6 +136,7 @@ class PgPointCloud(object):
             scaled_point.x = int((pt[xpos] - offset[0]) / scale)
             scaled_point.y = int((pt[ypos] - offset[1]) / scale)
             scaled_point.z = int((pt[zpos] - offset[2]) / scale)
+            scaled_point.intensity = int(pt[intensity_pos])
 
             if red_pos and green_pos and blue_pos:
                 scaled_point.red = int(pt[red_pos]) % 255

@@ -91,6 +91,9 @@ class Schema(object):
     def classification_position(self):
         return self.dim_position('classification')
 
+    def intensity_position(self):
+        return self.dim_position('intensity')
+
 class Dimension(object):
 
     def __init__(self, name, typename, size):
