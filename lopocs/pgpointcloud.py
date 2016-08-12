@@ -43,7 +43,7 @@ class PgPointCloud(object):
             poly = utils.boundingbox_to_polygon(box)
 
             # build sql query
-            sql = ("select pc_get(pc_explode(pc_range({0}, {1}, 1))) as pt from {2} "
+            sql = ("select pc_get(pc_pointn({0}, {1})) as pt from {2} "
                 "where pc_intersects({0}, st_geomfromtext('polygon (("
                 "{3}))',{4}));"
                 .format(self.session.column, n, self.session.table,
