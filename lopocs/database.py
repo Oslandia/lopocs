@@ -78,17 +78,16 @@ class Session():
         if ( Config.BB ):
             return Config.BB
 
-        bb = cls.query_aslist(
-                "SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"
-                .format(cls.column, cls.table))[0]
+        sql = ("SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"
+               .format(cls.column, cls.table))
+        bb = cls.query_aslist(sql)[0]
         bb_xy = utils.list_from_str_box(bb)
 
-        bb_z = cls.query_asdict(
-            "select "
-            "min(pc_patchmin({0}, 'z')) as zmin"
-            ",max(pc_patchmax({0}, 'z')) as zmax"
-            " from {1}"
-            .format(cls.column, cls.table))[0]
+        sql = ("select "
+               "min(pc_patchmin({0}, 'z')) as zmin"
+               ",max(pc_patchmax({0}, 'z')) as zmax"
+               " from {1}".format(cls.column, cls.table))
+        bb_z = cls.query_asdict(sql)[0]
 
         bb = {}
         bb['xmin'] = bb_xy[0]

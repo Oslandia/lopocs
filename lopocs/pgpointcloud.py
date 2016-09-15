@@ -2,11 +2,14 @@
 from struct import pack
 import json
 import numpy
+import codecs
+import struct
 import random
 
-from lazperf import Compressor, buildNumpyDescription
+from lazperf import Compressor, buildNumpyDescription, Decompressor
 from . import utils
 from .conf import Config
+
 
 class PgPointCloud(object):
 
@@ -17,18 +20,17 @@ class PgPointCloud(object):
         buff = bytearray()
         n = -1
 
-        print("LOD: ", lod)
-        print("DEPTH: ", Config.DEPTH)
-
         if Config.METHOD:
             if Config.METHOD == "random":
-                [n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
+                [n, buff] = self.__get_points_random(box, dims, offsets, scale, lod)
             elif Config.METHOD == "midoc":
-                if lod < Config.DEPTH:
-                    [n, buff] = self.__get_points_method2(box, dims, offsets, scale, lod)
+                if lod <= Config.DEPTH:
+                    [n, buff] = self.__get_points_midoc(box, dims, offsets, scale, lod)
         else:
-            [n, buff] = self.__get_points_method1(box, dims, offsets, scale, lod)
+            [n, buff] = self.__get_points_random(box, dims, offsets, scale, lod)
 
+        print("LOD: ", lod)
+        print("DEPTH: ", Config.DEPTH)
         print("NUM POINTS RETURNED: ", n)
 
         return buff
@@ -44,18 +46,14 @@ class PgPointCloud(object):
 
             # build sql query
             sql = ("select pc_get(pc_pointn({0}, {1})) as pt from {2} "
-                "where pc_intersects({0}, st_geomfromtext('polygon (("
-                "{3}))',{4}));"
-                .format(self.session.column, n, self.session.table,
-                        poly, self.session.srsid()))
-
+                   "where pc_intersects({0}, st_geomfromtext('polygon (("
+                   "{3}))',{4}));"
+                   .format(self.session.column, n, self.session.table,
+                           poly, self.session.srsid()))
             print(sql)
 
             # run the database
             points = self.session.query_aslist(sql)
-
-            #print(points)
-
             hexbuffer = self._prepare_for_potree(points, offset, scale)
         except:
             points = []
@@ -63,7 +61,7 @@ class PgPointCloud(object):
 
         return [len(points), hexbuffer]
 
-    def __get_points_method1(self, box, dims, offsets, scale, lod):
+    def __get_points_random(self, box, dims, offsets, scale, lod):
         """
         Randomly select 1 point in each patch within the bounding box.
         """
@@ -71,7 +69,7 @@ class PgPointCloud(object):
         n = random.randint(0, 400)
         return self.get_pointn(n, box, dims, offsets, scale)
 
-    def __get_points_method2(self, box, dims, offset, scale, lod):
+    def __get_points_midoc(self, box, dims, offset, scale, lod):
         """
         Select n points in each patch within the bounding box
         according to the LOD.
@@ -82,28 +80,58 @@ class PgPointCloud(object):
 
         # range
         beg = 0
-        for i in range(0, lod-1):
+        for i in range(0, lod):
             beg = beg + pow(4, i)
 
         end = 0
-        for i in range(0, lod):
+        for i in range(0, lod+1):
             end = end + pow(4, i)
 
         # build sql query
-        sql = ("select pc_get(pc_explode(pc_filterbetween( "
-               "pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))) from {1} "
-               "where pc_intersects({0}, st_geomfromtext('polygon (("
+        sql = ("select pc_compress(pc_patchtransform(pc_union(pc_filterbetween("
+               " pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), 2), 'laz') from {1}"
+               " where pc_intersects({0}, st_geomfromtext('polygon (("
                "{2}))',{3}));"
                .format(self.session.column, self.session.table,
                        poly, self.session.srsid(), beg, end-beg,
                        box[2], box[5]))
-
         print(sql)
 
-        points = self.session.query_aslist(sql)
-        hexbuffer = self._prepare_for_potree(points, offset, scale)
+        hexbuffer = bytearray()
+        try:
+            points = self.session.query_aslist(sql)[0]
 
-        return [len(points), hexbuffer]
+            # retrieve number of points in wkb pgpointcloud patch
+            npoints_hexa = points[18:26]
+            npoints = struct.unpack("I", codecs.decode(npoints_hexa, "hex"))[0]
+            hexbuffer = codecs.decode(points[34:], "hex")
+            hexbuffer += self.__hexa_signed_int32(npoints)
+
+            # uncompress
+            #s = json.dumps(utils.TestSchema().json()).replace("\\", "")
+            #dtype = buildNumpyDescription(json.loads(s))
+
+            ##lazdata = codecs.decode(points[34:], "hex")
+            #lazdata = bytes(hexbuffer)
+
+            #arr = numpy.fromstring(lazdata, dtype=numpy.uint8)
+            #d = Decompressor(arr, s)
+            #output = numpy.zeros(npoints * dtype.itemsize, dtype=numpy.uint8)
+            #decompressed = d.decompress(output)
+
+            #decompressed_str = numpy.ndarray.tostring(decompressed)
+
+            #for i in range(0, npoints):
+            #    point = decompressed_str[dtype.itemsize*i:dtype.itemsize*(i+1)]
+            #    x = point[0:4]
+            #    y = point[4:8]
+            #    z = point[8:12]
+            #    zd = struct.unpack("i", z)
+        except:
+            npoints = 0
+            hexbuffer.extend(self.__hexa_signed_int32(npoints))
+
+        return [npoints, hexbuffer]
 
     def __hexa_signed_int32(self, val):
         return pack('i', val)
@@ -156,11 +184,11 @@ class PgPointCloud(object):
             hexbuffer.extend(self.__hexa_signed_uint16(scaled_point.blue))
 
         # compress with laz
-        s = json.dumps(utils.GreyhoundReadSchema().json()).replace("\\","")
+        s = json.dumps(utils.GreyhoundReadSchema().json()).replace("\\", "")
         dtype = buildNumpyDescription(json.loads(s))
 
         c = Compressor(s)
-        arr = numpy.fromstring(bytes(hexbuffer), dtype = dtype)
+        arr = numpy.fromstring(bytes(hexbuffer), dtype=dtype)
         c = c.compress(arr)
         hexbuffer = bytearray(numpy.asarray(c))
 

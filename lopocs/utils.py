@@ -148,3 +148,17 @@ class GreyhoundReadSchema(Schema):
         self.dims.append(Dimension( "Red", "unsigned", 2 ))
         self.dims.append(Dimension( "Green", "unsigned", 2 ))
         self.dims.append(Dimension( "Blue", "unsigned", 2 ))
+
+class TestSchema(Schema):
+
+    def __init__(self):
+        Schema.__init__(self)
+
+        self.dims.append(Dimension( "X", "signed", 4 ))
+        self.dims.append(Dimension( "Y", "signed", 4 ))
+        self.dims.append(Dimension( "Z", "signed", 4 ))
+        self.dims.append(Dimension( "Intensity", "unsigned", 2 ))
+        self.dims.append(Dimension( "Classification", "unsigned", 1 ))
+        self.dims.append(Dimension( "Red", "unsigned", 2 ))
+        self.dims.append(Dimension( "Green", "unsigned", 2 ))
+        self.dims.append(Dimension( "Blue", "unsigned", 2 ))

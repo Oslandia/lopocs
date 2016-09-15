@@ -22,7 +22,7 @@ class GreyhoundInfo(object):
         schema_json = GreyhoundInfoSchema().json()
 
         info = json.dumps( {
-            "baseDepth" : 6,
+            "baseDepth" : 0,
             "bounds" : [box['xmin'], box['ymin'], box['zmin'],
                 box['xmax'], box['ymax'], box['zmax']],
             "boundsConforming" : [box['xmin'], box['ymin'], box['zmin'],
@@ -47,7 +47,7 @@ class GreyhoundRead(object):
         box = list_from_str(args['bounds'])
 
         read = Session.get_points(box, GreyhoundReadSchema().dims, offset,
-            args['scale'], args['depthEnd'] - Config.DEPTH + 1)
+            args['scale'], args['depthEnd'] - Config.DEPTH - 3)
 
         resp = Response(read)
         resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -56,27 +56,33 @@ class GreyhoundRead(object):
 
 class GreyhoundHierarchy(object):
 
-    def run(self):
-        resp = Response(json.dumps(self.fake_hierarchy(0, Config.DEPTH)))
+    def run(self, args):
+        if args['depthBegin'] == 8:
+            npatchs = Session.approx_row_count()
+            resp = Response(json.dumps(self.fake_hierarchy(0, Config.DEPTH+1, npatchs)))
+        else:
+            resp = Response(json.dumps(self.fake_hierarchy(0, 2, 0)))
+
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
         return resp
 
-    def fake_hierarchy(self, begin, end):
+    def fake_hierarchy(self, begin, end, npatchs):
         p = {}
         begin = begin + 1
 
         if begin != end:
-            p['n'] = 500*1000
+            p['n'] = npatchs
+            #p['n'] = 500*1000
 
             if begin != (end-1):
-                p['nwu'] = self.fake_hierarchy(begin, end)
-                p['nwd'] = self.fake_hierarchy(begin, end)
-                p['neu'] = self.fake_hierarchy(begin, end)
-                p['ned'] = self.fake_hierarchy(begin, end)
-                p['swu'] = self.fake_hierarchy(begin, end)
-                p['swd'] = self.fake_hierarchy(begin, end)
-                p['seu'] = self.fake_hierarchy(begin, end)
-                p['sed'] = self.fake_hierarchy(begin, end)
+                p['nwu'] = self.fake_hierarchy(begin, end, npatchs)
+                p['nwd'] = self.fake_hierarchy(begin, end, npatchs)
+                p['neu'] = self.fake_hierarchy(begin, end, npatchs)
+                p['ned'] = self.fake_hierarchy(begin, end, npatchs)
+                p['swu'] = self.fake_hierarchy(begin, end, npatchs)
+                p['swd'] = self.fake_hierarchy(begin, end, npatchs)
+                p['seu'] = self.fake_hierarchy(begin, end, npatchs)
+                p['sed'] = self.fake_hierarchy(begin, end, npatchs)
 
         return p
