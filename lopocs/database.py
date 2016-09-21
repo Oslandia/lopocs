@@ -92,10 +92,10 @@ class Session():
         bb = {}
         bb['xmin'] = bb_xy[0]
         bb['ymin'] = bb_xy[1]
-        bb['zmin'] = bb_z['zmin']
+        bb['zmin'] = float(bb_z['zmin'])
         bb['xmax'] = bb_xy[2]
         bb['ymax'] = bb_xy[3]
-        bb['zmax'] = bb_z['zmax']
+        bb['zmax'] = float(bb_z['zmax'])
 
         return bb
 
@@ -171,5 +171,6 @@ class Session():
         cls.db.autocommit = True
 
         # keep some configuration element
+        cls.dbname = app.config["PG_NAME"]
         cls.column = app.config["PG_COLUMN"]
         cls.table = app.config["PG_TABLE"]

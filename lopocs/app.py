@@ -54,6 +54,7 @@ class Read(Resource):
 greyhound_hierarchy_parser = reqparse.RequestParser()
 greyhound_hierarchy_parser.add_argument('depthBegin', type=int, required=True)
 greyhound_hierarchy_parser.add_argument('depthEnd', type=int, required=True)
+greyhound_hierarchy_parser.add_argument('bounds', type=str, required=True)
 
 @greyhound_ns.route("/hierarchy")
 class Hierarchy(Resource):

@@ -3,6 +3,7 @@ import json
 from flask import Response
 
 from .database import Session
+from . import utils
 from .utils import Dimension, Schema, decimal_default, list_from_str
 from .utils import GreyhoundReadSchema, GreyhoundInfoSchema
 from .conf import Config
@@ -57,14 +58,29 @@ class GreyhoundRead(object):
 class GreyhoundHierarchy(object):
 
     def run(self, args):
-        if args['depthBegin'] == 8:
-            npatchs = Session.approx_row_count()
-            resp = Response(json.dumps(self.fake_hierarchy(0, Config.DEPTH+1, npatchs)))
+        lod_min = args['depthBegin'] - 8  # greyhound start to 8
+
+        lod_max = args['depthEnd'] - 8 - 1  # greyhound start to 8 and non inclusive
+        if lod_max > (Config.DEPTH-1):
+            lod_max = Config.DEPTH-1
+
+        bbox = list_from_str(args['bounds'])
+
+        filename = ("{0}_{1}_{2}_{3}.hcy"
+                    .format(Session.dbname, lod_min, lod_max,
+                            '_'.join(str(e) for e in bbox)))
+        cached_hcy = utils.read_hierarchy_in_cache(filename)
+
+        if cached_hcy:
+            resp = Response(json.dumps(cached_hcy))
         else:
-            resp = Response(json.dumps(self.fake_hierarchy(0, 2, 0)))
+            new_hcy = utils.build_hierarchy_from_pg(Session, lod_max, bbox, lod_min)
+            utils.write_hierarchy_in_cache(new_hcy, filename)
+            resp = Response(json.dumps(new_hcy))
 
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
+
         return resp
 
     def fake_hierarchy(self, begin, end, npatchs):

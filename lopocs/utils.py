@@ -1,11 +1,31 @@
 # -*- coding: utf-8 -*-
 import json
-import re
+import os
 import decimal
 
 # -----------------------------------------------------------------------------
 # functions
 # -----------------------------------------------------------------------------
+def write_hierarchy_in_cache(d, filename):
+    home = os.path.expanduser("~")
+    dircache = os.path.join(home, ".cache/lopocs")
+    path = os.path.join(dircache, filename)
+
+    f = open(path, 'w')
+    f.write(json.dumps(d))
+    f.close()
+
+def read_hierarchy_in_cache(filename):
+    home = os.path.expanduser("~")
+    dircache = os.path.join(home, ".cache/lopocs")
+    path = os.path.join(dircache, filename)
+
+    d = {}
+    if os.path.exists(path):
+        d = json.load(open(path))
+
+    return d
+
 def decimal_default(obj):
     if isinstance(obj, decimal.Decimal):
         return float(obj)
@@ -44,6 +64,96 @@ def list_from_str_box( box_str ):
 
     l = [float(x) for x in box_str.split(',')]
     return l
+
+def build_hierarchy_from_pg(session, lod_max, bbox, lod):
+
+    # range
+    beg = 0
+    for i in range(0, lod):
+        beg = beg + pow(4, i)
+
+    end = 0
+    for i in range(0, lod+1):
+        end = end + pow(4, i)
+
+    # run sql
+    poly = boundingbox_to_polygon(bbox)
+    sql = ("select pc_numpoints(pc_union(pc_filterbetween("
+           "pc_range(pa, {4}, {5}), 'Z', {6}, {7}))) from {0} "
+           "where pc_intersects({1}, st_geomfromtext('polygon (("
+           "{2}))',{3}));"
+           .format(session.table, session.column, poly, session.srsid(),
+                   beg, end-beg, bbox[2], bbox[5]))
+    res = session.query_aslist(sql)[0]
+
+    hierarchy = {}
+    if lod <= lod_max and res:
+        hierarchy['n'] = res
+
+    lod += 1
+
+    if lod <= lod_max:
+        # width / length / height
+        width = bbox[3] - bbox[0]
+        length = bbox[4] - bbox[1]
+        height = bbox[5] - bbox[2]
+
+        up = bbox[5]
+        middle = up - height/2
+        down = bbox[2]
+
+        x = bbox[0]
+        y = bbox[1]
+
+        # nwd
+        bbox_nwd = [x, y+length/2, down, x+width/2, y+length, middle]
+        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod)
+        if h_nwd:
+            hierarchy['nwd'] = h_nwd
+
+        # nwu
+        bbox_nwu = [x, y+length/2, middle, x+width/2, y+length, up]
+        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod)
+        if h_nwu:
+            hierarchy['nwu'] = h_nwu
+
+        # ned
+        bbox_ned = [x+width/2, y+length/2, down, x+width, y+length, middle]
+        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod)
+        if h_ned:
+            hierarchy['ned'] = h_ned
+
+        # neu
+        bbox_neu = [x+width/2, y+length/2, middle, x+width, y+length, up]
+        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod)
+        if h_neu:
+            hierarchy['neu'] = h_neu
+
+        # swd
+        bbox_swd = [x, y, down, x+width/2, y+length/2, middle]
+        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod)
+        if h_swd:
+            hierarchy['swd'] = h_swd
+
+        # swu
+        bbox_swu = [x, y, middle, x+width/2, y+length/2, up]
+        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod)
+        if h_swu:
+            hierarchy['swu'] = h_swu
+
+        # sed
+        bbox_sed = [x+width/2, y, down, x+width, y+length/2, middle]
+        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod)
+        if h_sed:
+            hierarchy['sed'] = h_sed
+
+        # seu
+        bbox_seu = [x+width/2, y, middle, x+width, y+length/2, up]
+        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod)
+        if h_seu:
+            hierarchy['seu'] = h_seu
+
+    return hierarchy
 
 # -----------------------------------------------------------------------------
 # class
