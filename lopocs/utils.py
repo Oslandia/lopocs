@@ -79,11 +79,11 @@ def build_hierarchy_from_pg(session, lod_max, bbox, lod):
     # run sql
     poly = boundingbox_to_polygon(bbox)
     sql = ("select pc_numpoints(pc_union(pc_filterbetween("
-           "pc_range(pa, {4}, {5}), 'Z', {6}, {7}))) from {0} "
+           "pc_range({8}, {4}, {5}), 'Z', {6}, {7}))) from {0} "
            "where pc_intersects({1}, st_geomfromtext('polygon (("
            "{2}))',{3}));"
            .format(session.table, session.column, poly, session.srsid(),
-                   beg, end-beg, bbox[2], bbox[5]))
+                   beg, end-beg, bbox[2], bbox[5], session.column))
     res = session.query_aslist(sql)[0]
 
     hierarchy = {}

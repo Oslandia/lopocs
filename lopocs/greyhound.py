@@ -48,7 +48,7 @@ class GreyhoundRead(object):
         box = list_from_str(args['bounds'])
 
         read = Session.get_points(box, GreyhoundReadSchema().dims, offset,
-            args['scale'], args['depthEnd'] - Config.DEPTH - 3)
+            args['scale'], args['depthEnd'] - 8 - 1)
 
         resp = Response(read)
         resp.headers['Access-Control-Allow-Origin'] = '*'

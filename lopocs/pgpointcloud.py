@@ -24,8 +24,9 @@ class PgPointCloud(object):
             if Config.METHOD == "random":
                 [n, buff] = self.__get_points_random(box, dims, offsets, scale, lod)
             elif Config.METHOD == "midoc":
-                if lod <= Config.DEPTH:
-                    [n, buff] = self.__get_points_midoc(box, dims, offsets, scale, lod)
+                if lod > Config.DEPTH:
+                    lod = Config.DEPTH-1
+                [n, buff] = self.__get_points_midoc(box, dims, offsets, scale, lod)
         else:
             [n, buff] = self.__get_points_random(box, dims, offsets, scale, lod)
 
