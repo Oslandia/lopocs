@@ -2,6 +2,7 @@
 
 import yaml
 import argparse
+import os
 import sys
 import json
 
@@ -16,6 +17,9 @@ if __name__ == '__main__':
 
     cfg_help = 'configuration file'
     parser.add_argument('cfg', metavar='cfg', type=str, help=cfg_help)
+
+    output_dir_help = "output directory"
+    parser.add_argument('outdir', metavar='outdir', type=str, help=cfg_help)
 
     args = parser.parse_args()
 
@@ -40,12 +44,14 @@ if __name__ == '__main__':
     bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
             fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
 
+    limit = ymlconf_db['LIMIT']
     lod_min = 0
     lod_max = ymlconf_db['DEPTH']-1
     bbox_str = '_'.join(str(e) for e in bbox)
-    h = utils.build_hierarchy_from_pg(Session, lod_max, bbox, lod_min)
+    h = utils.build_hierarchy_from_pg(Session, lod_max, bbox, lod_min, limit)
 
     name = ("hierarchy_{0}.txt".format(ymlconf_db['PG_NAME']))
-    f = open(name, 'w')
+    path = os.path.join(args.outdir, name)
+    f = open(path, 'w')
     f.write(json.dumps(h))
     f.close()

@@ -1,0 +1,24 @@
+{
+  "pipeline":[
+    {
+      "type":"readers.las",
+      "filename":"!LAZFILE!",
+      "spatialreference":"EPSG:!SRID!"
+    },
+    {
+      "type":"filters.chipper",
+      "capacity":!SIZE!
+    },
+    {
+      "type":"filters.midoc"
+    },
+    {
+      "type":"writers.pgpointcloud",
+      "connection":"host=!HOST! dbname=!DB! user=!USER!",
+      "table":"!TABLE!",
+      "compression":"none",
+      "srid":"!SRID!",
+      "overwrite":"false"
+    }
+  ]
+}

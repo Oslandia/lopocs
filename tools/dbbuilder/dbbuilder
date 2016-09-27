@@ -1,0 +1,297 @@
+#! /bin/sh
+
+DO_DEL=0
+DO_PIPES=0
+DO_EXTRACT=1
+DO_INITDB=0
+DO_FILLDB=0
+DO_CONF=1
+DO_MORTON=0
+DO_HIERARCHY=0
+
+DBBUILDER_ROOT=$(dirname $(readlink -f $0))
+
+# -----------------------------------------------------------------------------
+# read cli
+# -----------------------------------------------------------------------------
+while [ $# -gt 1 ]
+do
+  key="$1"
+
+  case $key in
+    -db)
+      DB="$2"
+      shift
+    ;;
+
+    -user)
+      USR="$2"
+      shift
+    ;;
+
+    -host)
+      HOST="$2"
+      shift
+    ;;
+
+    -size)
+      SIZE="$2"
+      shift
+    ;;
+
+    -srid)
+      SRID="$2"
+      shift
+    ;;
+
+    -table)
+      TABLE="$2"
+      shift
+    ;;
+
+    -files)
+      FILES="$2"
+      shift
+    ;;
+
+    -j)
+      PARALLEL=YES
+      shift
+    ;;
+
+    -wdir)
+      WDIR="$2"
+      shift
+    ;;
+
+    *)
+      # unknown option
+    ;;
+  esac
+
+  shift
+done
+
+if [ -z "$TABLE" ] || [ -z "$DB" ] || [ -z "$HOST" ] || [ -z "$USR" ] \
+  || [ -z "$SIZE" ] || [ -z "$FILES" ]
+then
+  echo "Invalid usage: "
+  echo "  dbbuilder -db db -table table -host host -user user -size size -files files"
+  exit
+fi
+
+# -----------------------------------------------------------------------------
+# default values for optional parameters
+# -----------------------------------------------------------------------------
+if [ -z "$WDIR" ]
+then
+  WDIR=/tmp/dbbuilder
+fi
+
+if [ -z "$SRID" ]
+then
+  SRID="4326"
+fi
+
+if [ $DO_DEL -eq 1 ]
+then
+  rm -rf $WDIR
+  mkdir -p $WDIR
+fi
+
+# -----------------------------------------------------------------------------
+# build json pipes for pdal
+# -----------------------------------------------------------------------------
+if [ $DO_PIPES -eq 1 ]
+then
+  echo "Build pipes for PDAL...\c"
+
+  for f in $FILES
+  do
+    FILENAME=$(basename $f)
+    FILENAME_BASE=$(echo $FILENAME | cut -f 1 -d '.')
+    PIPE_NAME="$FILENAME_BASE""_pipe.json"
+
+    cp pipe.json.tpl $WDIR/$PIPE_NAME
+
+    sed -i -e "s@!LAZFILE!@$f@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!SRID!@$SRID@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!SIZE!@$SIZE@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!HOST!@$HOST@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!USER!@$USR@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!DB!@$DB@g" $WDIR/$PIPE_NAME
+  done
+
+  echo " done"
+fi
+
+# -----------------------------------------------------------------------------
+# extract infos from files
+# -----------------------------------------------------------------------------
+XMIN=9999999.9
+YMIN=9999999.9
+ZMIN=9999999.9
+
+XMAX=0.0
+YMAX=0.0
+ZMAX=0.0
+
+XOFFSET=0.0
+YOFFSET=0.0
+ZOFFSET=0.0
+
+if [ $DO_EXTRACT -eq 1 ]
+then
+  echo "Extract informations from files...\c"
+
+  for f in $FILES
+  do
+    XMIN_F=$(lasinfo $f | grep "Min X, Y, Z" | cut -f 7 -d ' ' | tr -d ,)
+    YMIN_F=$(lasinfo $f | grep "Min X, Y, Z" | cut -f 8 -d ' ' | tr -d ,)
+    ZMIN_F=$(lasinfo $f | grep "Min X, Y, Z" | cut -f 9 -d ' ' | tr -d ,)
+
+    XMAX_F=$(lasinfo $f | grep "Max X, Y, Z" | cut -f 7 -d ' ' | tr -d ,)
+    YMAX_F=$(lasinfo $f | grep "Max X, Y, Z" | cut -f 8 -d ' ' | tr -d ,)
+    ZMAX_F=$(lasinfo $f | grep "Max X, Y, Z" | cut -f 9 -d ' ' | tr -d ,)
+
+    if [ $(echo "$XMIN_F < $XMIN" | bc) -eq 1 ]
+    then
+      XMIN=$XMIN_F
+    fi
+
+    if [ $(echo "$YMIN_F < $YMIN" | bc) -eq 1 ]
+    then
+      YMIN=$YMIN_F
+    fi
+
+    if [ $(echo "$ZMIN_F < $ZMIN" | bc) -eq 1 ]
+    then
+      ZMIN=$ZMIN_F
+    fi
+
+    if [ $(echo "$YMAX_F > $YMAX" | bc) -eq 1 ]
+    then
+      YMAX=$YMAX_F
+    fi
+
+    if [ $(echo "$XMAX_F > $XMAX" | bc) -eq 1 ]
+    then
+      XMAX=$XMAX_F
+    fi
+
+    if [ $(echo "$ZMAX_F > $ZMAX" | bc) -eq 1 ]
+    then
+      ZMAX=$ZMAX_F
+    fi
+  done
+
+  XOFFSET=$(echo "$XMIN + ($XMAX-$XMIN)/2" | bc)
+  YOFFSET=$(echo "$YMIN + ($YMAX-$YMIN)/2" | bc)
+  ZOFFSET=$(echo "$ZMIN + ($ZMAX-$ZMIN)/2" | bc)
+
+  echo " done"
+fi
+
+# -----------------------------------------------------------------------------
+# init the database
+# -----------------------------------------------------------------------------
+if [ $DO_INITDB -eq 1 ]
+then
+  echo "Init the database...\c"
+
+  cp $DBBUILDER_ROOT/potree_schema.sql $WDIR
+  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema.sql
+  sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema.sql
+  sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema.sql
+  sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema.sql
+
+  cp $DBBUILDER_ROOT/cell_schema.sql $WDIR
+  sed -i -e "s@!SRID!@$SRID@g" $WDIR/cell_schema.sql
+
+  dropdb $DB > /dev/null 2>&1
+  createdb $DB > /dev/null 2>&1
+  psql -d $DB -f $DBBUILDER_ROOT/extensions.sql > /dev/null 2>&1
+  psql -d $DB -f $WDIR/potree_schema.sql > /dev/null 2>&1
+  psql -d $DB -f $WDIR/cell_schema.sql > /dev/null 2>&1
+
+  echo " done"
+fi
+
+# -----------------------------------------------------------------------------
+# fill the database and create index
+# -----------------------------------------------------------------------------
+if [ $DO_FILLDB -eq 1 ]
+then
+  echo "Fill the database...\c"
+
+  NFILES=$(ls -1U $WDIR/*.json | wc -l)
+  ITER=1
+  for f in $WDIR/*.json
+  do
+    echo " $ITER/$NFILES\c"
+    pdal pipeline -i $f
+    ITER=$((ITER+1))
+  done
+
+  psql -d $DB -f $DBBUILDER_ROOT/create_index.sql
+
+  echo ""
+fi
+
+# -----------------------------------------------------------------------------
+# build configurations files for lopocs/uwsgi
+# -----------------------------------------------------------------------------
+IP="localhost"
+INTERFACE="wlan0"
+
+if [ $DO_CONF -eq 1 ]
+then
+  echo "Build configuration files for lopocs...\c"
+
+  IP=$(/sbin/ifconfig $INTERFACE \
+    | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
+
+  cp $DBBUILDER_ROOT/lightpcss.uwsgi.yml.tpl $WDIR/lightpcss.uwsgi.yml.$DB
+  sed -i -e "s@!DB!@$DB@g" $WDIR/lightpcss.uwsgi.yml.$DB
+  sed -i -e "s@!IP!@$IP@g" $WDIR/lightpcss.uwsgi.yml.$DB
+
+  cp $DBBUILDER_ROOT/lightpcss.yml.tpl $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!HOST!@$HOST@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!DB!@$DB@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!USER!@$USR@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!XMIN!@$XMIN@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!YMIN!@$YMIN@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!ZMIN!@$ZMIN@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!XMAX!@$XMAX@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!YMAX!@$YMAX@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@!ZMAX!@$ZMAX@g" $WDIR/lightpcss.yml.$DB
+  sed -i -e "s@\t@ @g" $WDIR/lightpcss.yml.$DB
+
+  echo " done"
+fi
+
+# -----------------------------------------------------------------------------
+# compute a morton code for each patch
+# -----------------------------------------------------------------------------
+if [ $DO_MORTON -eq 1 ]
+then
+  echo "Compute morton codes...\c"
+
+  python3 $DBBUILDER_ROOT/../build_grid.py $WDIR/lightpcss.yml.$DB
+
+  echo "done"
+fi
+
+# -----------------------------------------------------------------------------
+# build a hierarchy
+# -----------------------------------------------------------------------------
+if [ $DO_HIERARCHY -eq 1 ]
+then
+  echo "Build a greyhound hierarchy...\c"
+
+  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lightpcss.yml.$DB $WDIR
+
+  echo "done"
+fi

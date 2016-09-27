@@ -100,6 +100,24 @@ class Session():
         return bb
 
     @classmethod
+    def boundingbox2d(cls):
+        """
+        """
+
+        sql = ("SELECT ST_Extent({0}::geometry) as table_extent FROM {1};"
+               .format(cls.column, cls.table))
+        bb = cls.query_aslist(sql)[0]
+        bb_xy = utils.list_from_str_box(bb)
+
+        bb = {}
+        bb['xmin'] = bb_xy[0]
+        bb['ymin'] = bb_xy[1]
+        bb['xmax'] = bb_xy[2]
+        bb['ymax'] = bb_xy[3]
+
+        return bb
+
+    @classmethod
     def srsid(cls):
         return cls.query_aslist(
             "select pc_summary({0})::json->'srid' as srsid from {1} where id = 1"

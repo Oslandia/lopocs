@@ -5,6 +5,7 @@ class Config(object):
     BB = None
     DEPTH = 6
     METHOD = None # random / midoc
+    LIMIT = 10000 # morton
 
     @classmethod
     def init(cls, config):
@@ -24,3 +25,6 @@ class Config(object):
 
         if 'METHOD' in config:
             cls.METHOD = config['METHOD']
+
+        if 'LIMIT' in config:
+            cls.LIMIT = config['LIMIT']

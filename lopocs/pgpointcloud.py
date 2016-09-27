@@ -91,11 +91,12 @@ class PgPointCloud(object):
         # build sql query
         sql = ("select pc_compress(pc_patchtransform(pc_union(pc_filterbetween("
                " pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), 2), 'laz') from {1}"
-               " where pc_intersects({0}, st_geomfromtext('polygon (("
-               "{2}))',{3}));"
+               " where id in (select id from pa "
+               "where pc_intersects({0}, st_geomfromtext('polygon (("
+               "{2}))',{3})) order by morton limit {8});"
                .format(self.session.column, self.session.table,
-                       poly, self.session.srsid(), beg, end-beg,
-                       box[2], box[5]))
+                       poly, self.session.srsid(), 0, end-beg,
+                       box[2], box[5], Config.LIMIT))
         print(sql)
 
         hexbuffer = bytearray()

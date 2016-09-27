@@ -65,7 +65,7 @@ def list_from_str_box( box_str ):
     l = [float(x) for x in box_str.split(',')]
     return l
 
-def build_hierarchy_from_pg(session, lod_max, bbox, lod):
+def build_hierarchy_from_pg(session, lod_max, bbox, lod, limit):
 
     # range
     beg = 0
@@ -80,10 +80,11 @@ def build_hierarchy_from_pg(session, lod_max, bbox, lod):
     poly = boundingbox_to_polygon(bbox)
     sql = ("select pc_numpoints(pc_union(pc_filterbetween("
            "pc_range({8}, {4}, {5}), 'Z', {6}, {7}))) from {0} "
+           "where id in (select id from {0} "
            "where pc_intersects({1}, st_geomfromtext('polygon (("
-           "{2}))',{3}));"
+           "{2}))',{3})) order by morton limit {9});"
            .format(session.table, session.column, poly, session.srsid(),
-                   beg, end-beg, bbox[2], bbox[5], session.column))
+                   0, end-beg, bbox[2], bbox[5], session.column, limit))
     res = session.query_aslist(sql)[0]
 
     hierarchy = {}
@@ -107,49 +108,49 @@ def build_hierarchy_from_pg(session, lod_max, bbox, lod):
 
         # nwd
         bbox_nwd = [x, y+length/2, down, x+width/2, y+length, middle]
-        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod)
+        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod, limit)
         if h_nwd:
             hierarchy['nwd'] = h_nwd
 
         # nwu
         bbox_nwu = [x, y+length/2, middle, x+width/2, y+length, up]
-        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod)
+        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod, limit)
         if h_nwu:
             hierarchy['nwu'] = h_nwu
 
         # ned
         bbox_ned = [x+width/2, y+length/2, down, x+width, y+length, middle]
-        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod)
+        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod, limit)
         if h_ned:
             hierarchy['ned'] = h_ned
 
         # neu
         bbox_neu = [x+width/2, y+length/2, middle, x+width, y+length, up]
-        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod)
+        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod, limit)
         if h_neu:
             hierarchy['neu'] = h_neu
 
         # swd
         bbox_swd = [x, y, down, x+width/2, y+length/2, middle]
-        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod)
+        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod, limit)
         if h_swd:
             hierarchy['swd'] = h_swd
 
         # swu
         bbox_swu = [x, y, middle, x+width/2, y+length/2, up]
-        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod)
+        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod, limit)
         if h_swu:
             hierarchy['swu'] = h_swu
 
         # sed
         bbox_sed = [x+width/2, y, down, x+width, y+length/2, middle]
-        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod)
+        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod, limit)
         if h_sed:
             hierarchy['sed'] = h_sed
 
         # seu
         bbox_seu = [x+width/2, y, middle, x+width, y+length/2, up]
-        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod)
+        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod, limit)
         if h_seu:
             hierarchy['seu'] = h_seu
 

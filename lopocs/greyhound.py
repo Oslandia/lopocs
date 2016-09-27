@@ -74,9 +74,12 @@ class GreyhoundHierarchy(object):
         if cached_hcy:
             resp = Response(json.dumps(cached_hcy))
         else:
-            new_hcy = utils.build_hierarchy_from_pg(Session, lod_max, bbox, lod_min)
+            new_hcy = utils.build_hierarchy_from_pg(Session, lod_max, bbox,
+                                                    lod_min, Config.LIMIT)
             utils.write_hierarchy_in_cache(new_hcy, filename)
             resp = Response(json.dumps(new_hcy))
+
+        #resp = Response(json.dumps(self.fake_hierarchy(0, 6, 10000)))
 
         resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
