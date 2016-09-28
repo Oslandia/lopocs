@@ -2,23 +2,20 @@
 import json
 import os
 import decimal
+from .conf import Config
 
 # -----------------------------------------------------------------------------
 # functions
 # -----------------------------------------------------------------------------
 def write_hierarchy_in_cache(d, filename):
-    home = os.path.expanduser("~")
-    dircache = os.path.join(home, ".cache/lopocs")
-    path = os.path.join(dircache, filename)
+    path = os.path.join(Config.CACHE_DIR, filename)
 
     f = open(path, 'w')
     f.write(json.dumps(d))
     f.close()
 
 def read_hierarchy_in_cache(filename):
-    home = os.path.expanduser("~")
-    dircache = os.path.join(home, ".cache/lopocs")
-    path = os.path.join(dircache, filename)
+    path = os.path.join(Config.CACHE_DIR, filename)
 
     d = {}
     if os.path.exists(path):

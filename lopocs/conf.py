@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
+import os
+
+
 class Config(object):
 
     BB = None
     DEPTH = 6
-    METHOD = None # random / midoc
-    LIMIT = 10000 # morton
+    METHOD = None  # random / midoc
+    LIMIT = 10000  # morton
+    CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache/lopocs")
 
     @classmethod
     def init(cls, config):
@@ -28,3 +32,6 @@ class Config(object):
 
         if 'LIMIT' in config:
             cls.LIMIT = config['LIMIT']
+
+        if 'CACHE_DIR' in config:
+            cls.CACHE_DIR = config['CACHE_DIR']
