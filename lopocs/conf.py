@@ -7,9 +7,13 @@ class Config(object):
 
     BB = None
     DEPTH = 6
-    METHOD = None  # random / midoc
-    LIMIT = 10000  # morton
     CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache/lopocs")
+    MAX_PATCHS_PER_QUERY = None
+    MAX_POINTS_PER_PATCH = None
+    POTREE_SCH_PCID_SCALE_01 = 2  # scale 0.1
+    POTREE_SCH_PCID_SCALE_001 = 2  # scale 0.01
+    USE_MORTON = True
+    DEBUG = False
 
     @classmethod
     def init(cls, config):
@@ -27,11 +31,25 @@ class Config(object):
         if 'DEPTH' in config:
             cls.DEPTH = config['DEPTH']
 
-        if 'METHOD' in config:
-            cls.METHOD = config['METHOD']
-
-        if 'LIMIT' in config:
-            cls.LIMIT = config['LIMIT']
-
         if 'CACHE_DIR' in config:
             cls.CACHE_DIR = config['CACHE_DIR']
+            if not os.path.isdir(cls.CACHE_DIR):
+                os.makedirs(cls.CACHE_DIR)
+
+        if 'MAX_PATCHS_PER_QUERY' in config:
+            cls.MAX_PATCHS_PER_QUERY = config['MAX_PATCHS_PER_QUERY']
+
+        if 'MAX_POINTS_PER_PATCH' in config:
+            cls.MAX_POINTS_PER_PATCH = config['MAX_POINTS_PER_PATCH']
+
+        if 'POTREE_SCH_PCID_SCALE_01' in config:
+            cls.POTREE_SCH_PCID_SCALE_01 = config['POTREE_SCH_PCID_SCALE_01']
+
+        if 'POTREE_SCH_PCID_SCALE_001' in config:
+            cls.POTREE_SCH_PCID_SCALE_001 = config['POTREE_SCH_PCID_SCALE_001']
+
+        if 'USE_MORTON' in config:
+            cls.USE_MORTON = config['USE_MORTON']
+
+        if 'DEBUG' in config:
+            cls.DEBUG = config['DEBUG']

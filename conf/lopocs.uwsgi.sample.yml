@@ -9,4 +9,4 @@ uwsgi:
     protocol: http
     need-app: true
     catch: exceptions=true
-    env: LOPOCS_SETTINGS=/home/user/lightpcss/conf/lopocs.yml
+    env: LOPOCS_SETTINGS=/home/user/lopocs/conf/lopocs.yml
