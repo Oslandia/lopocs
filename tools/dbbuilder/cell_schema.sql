@@ -1,4 +1,4 @@
-INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (3, !SRID!,
+INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (1, !SRID!,
 '<?xml version="1.0" encoding="UTF-8"?>
 <pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/1.1"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">

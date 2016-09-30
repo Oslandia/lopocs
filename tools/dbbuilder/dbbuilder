@@ -1,14 +1,15 @@
 #! /bin/sh
 
-DO_DEL=0
-DO_PIPES=0
+DO_DEL=1
+DO_PIPES=1
 DO_EXTRACT=1
-DO_INITDB=0
-DO_FILLDB=0
+DO_INITDB=1
+DO_FILLDB=1
 DO_CONF=1
-DO_MORTON=0
-DO_HIERARCHY=0
+DO_MORTON=1
+DO_HIERARCHY=1
 
+PWD=""
 DBBUILDER_ROOT=$(dirname $(readlink -f $0))
 
 # -----------------------------------------------------------------------------
@@ -64,6 +65,16 @@ do
       shift
     ;;
 
+    -venv)
+      VENV="$2"
+      shift
+    ;;
+
+    -pwd)
+      PWD="$2"
+      shift
+    ;;
+
     *)
       # unknown option
     ;;
@@ -73,10 +84,10 @@ do
 done
 
 if [ -z "$TABLE" ] || [ -z "$DB" ] || [ -z "$HOST" ] || [ -z "$USR" ] \
-  || [ -z "$SIZE" ] || [ -z "$FILES" ]
+  || [ -z "$SIZE" ] || [ -z "$FILES" ] || [ -z "$VENV" ]
 then
   echo "Invalid usage: "
-  echo "  dbbuilder -db db -table table -host host -user user -size size -files files"
+  echo "  dbbuilder -db db -table table -host host -user user -size size -files files -venv venv"
   exit
 fi
 
@@ -104,7 +115,7 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_PIPES -eq 1 ]
 then
-  echo "Build pipes for PDAL...\c"
+  echo "Build pipes for PDAL..."
 
   for f in $FILES
   do
@@ -118,12 +129,11 @@ then
     sed -i -e "s@!SRID!@$SRID@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!SIZE!@$SIZE@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/$PIPE_NAME
-    sed -i -e "s@!HOST!@$HOST@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!USER!@$USR@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!DB!@$DB@g" $WDIR/$PIPE_NAME
   done
 
-  echo " done"
+  echo "  => done"
 fi
 
 # -----------------------------------------------------------------------------
@@ -143,7 +153,7 @@ ZOFFSET=0.0
 
 if [ $DO_EXTRACT -eq 1 ]
 then
-  echo "Extract informations from files...\c"
+  echo "Extract informations from files..."
 
   for f in $FILES
   do
@@ -190,7 +200,7 @@ then
   YOFFSET=$(echo "$YMIN + ($YMAX-$YMIN)/2" | bc)
   ZOFFSET=$(echo "$ZMIN + ($ZMAX-$ZMIN)/2" | bc)
 
-  echo " done"
+  echo "  => done"
 fi
 
 # -----------------------------------------------------------------------------
@@ -198,24 +208,31 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_INITDB -eq 1 ]
 then
-  echo "Init the database...\c"
+  echo "Init the database..."
 
-  cp $DBBUILDER_ROOT/potree_schema.sql $WDIR
-  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema.sql
-  sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema.sql
-  sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema.sql
-  sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema.sql
+  cp $DBBUILDER_ROOT/potree_schema_scale_01.sql $WDIR
+  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_01.sql
+  sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema_scale_01.sql
+  sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema_scale_01.sql
+  sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema_scale_01.sql
+
+  cp $DBBUILDER_ROOT/potree_schema_scale_001.sql $WDIR
+  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_001.sql
+  sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema_scale_001.sql
+  sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema_scale_001.sql
+  sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema_scale_001.sql
 
   cp $DBBUILDER_ROOT/cell_schema.sql $WDIR
   sed -i -e "s@!SRID!@$SRID@g" $WDIR/cell_schema.sql
 
-  dropdb $DB > /dev/null 2>&1
-  createdb $DB > /dev/null 2>&1
+  dropdb $DB > /dev/null
+  createdb $DB > /dev/null
   psql -d $DB -f $DBBUILDER_ROOT/extensions.sql > /dev/null 2>&1
-  psql -d $DB -f $WDIR/potree_schema.sql > /dev/null 2>&1
-  psql -d $DB -f $WDIR/cell_schema.sql > /dev/null 2>&1
+  psql -d $DB -f $WDIR/potree_schema_scale_01.sql > /dev/null
+  psql -d $DB -f $WDIR/potree_schema_scale_001.sql > /dev/null
+  psql -d $DB -f $WDIR/cell_schema.sql > /dev/null
 
-  echo " done"
+  echo "  => done"
 fi
 
 # -----------------------------------------------------------------------------
@@ -223,53 +240,49 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_FILLDB -eq 1 ]
 then
-  echo "Fill the database...\c"
+  echo "Fill the database..."
 
   NFILES=$(ls -1U $WDIR/*.json | wc -l)
   ITER=1
   for f in $WDIR/*.json
   do
-    echo " $ITER/$NFILES\c"
+    echo "  $ITER/$NFILES"
     pdal pipeline -i $f
     ITER=$((ITER+1))
   done
 
-  psql -d $DB -f $DBBUILDER_ROOT/create_index.sql
+  psql -d $DB -f $DBBUILDER_ROOT/create_index.sql > /dev/null
 
-  echo ""
+  echo "  => done"
 fi
 
 # -----------------------------------------------------------------------------
 # build configurations files for lopocs/uwsgi
 # -----------------------------------------------------------------------------
-IP="localhost"
-INTERFACE="wlan0"
-
 if [ $DO_CONF -eq 1 ]
 then
-  echo "Build configuration files for lopocs...\c"
+  echo "Build configuration files for lopocs..."
 
-  IP=$(/sbin/ifconfig $INTERFACE \
-    | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
+  cp $DBBUILDER_ROOT/lopocs.uwsgi.yml.tpl $WDIR/lopocs.uwsgi.yml.$DB
+  sed -i -e "s@!VENV!@$VENV@g" $WDIR/lopocs.uwsgi.yml.$DB
+  sed -i -e "s@!USER!@$USR@g" $WDIR/lopocs.uwsgi.yml.$DB
+  sed -i -e "s@!DB!@$DB@g" $WDIR/lopocs.uwsgi.yml.$DB
 
-  cp $DBBUILDER_ROOT/lightpcss.uwsgi.yml.tpl $WDIR/lightpcss.uwsgi.yml.$DB
-  sed -i -e "s@!DB!@$DB@g" $WDIR/lightpcss.uwsgi.yml.$DB
-  sed -i -e "s@!IP!@$IP@g" $WDIR/lightpcss.uwsgi.yml.$DB
+  cp $DBBUILDER_ROOT/lopocs.yml.tpl $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!PWD!@$PWD@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!HOST!@$HOST@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!DB!@$DB@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!USER!@$USR@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!XMIN!@$XMIN@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!YMIN!@$YMIN@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!ZMIN!@$ZMIN@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!XMAX!@$XMAX@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!YMAX!@$YMAX@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!ZMAX!@$ZMAX@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@\t@ @g" $WDIR/lopocs.yml.$DB
 
-  cp $DBBUILDER_ROOT/lightpcss.yml.tpl $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!HOST!@$HOST@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!DB!@$DB@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!USER!@$USR@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!XMIN!@$XMIN@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!YMIN!@$YMIN@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!ZMIN!@$ZMIN@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!XMAX!@$XMAX@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!YMAX!@$YMAX@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@!ZMAX!@$ZMAX@g" $WDIR/lightpcss.yml.$DB
-  sed -i -e "s@\t@ @g" $WDIR/lightpcss.yml.$DB
-
-  echo " done"
+  echo "  => done"
 fi
 
 # -----------------------------------------------------------------------------
@@ -277,11 +290,11 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_MORTON -eq 1 ]
 then
-  echo "Compute morton codes...\c"
+  echo "Compute morton codes..."
 
-  python3 $DBBUILDER_ROOT/../build_grid.py $WDIR/lightpcss.yml.$DB
+  python3 $DBBUILDER_ROOT/../build_grid.py $WDIR/lopocs.yml.$DB
 
-  echo "done"
+  echo "\n  => done"
 fi
 
 # -----------------------------------------------------------------------------
@@ -289,9 +302,9 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_HIERARCHY -eq 1 ]
 then
-  echo "Build a greyhound hierarchy...\c"
+  echo "Build a greyhound hierarchy..."
 
-  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lightpcss.yml.$DB $WDIR
+  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lopocs.yml.$DB $WDIR
 
-  echo "done"
+  echo "  => done"
 fi

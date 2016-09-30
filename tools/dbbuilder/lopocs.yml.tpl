@@ -5,10 +5,15 @@ flask:
     PG_NAME: !DB!
     PG_PORT: 5432
     PG_USER: !USER!
-    PG_PASSWORD:
+    PG_PASSWORD: !PWD!
     PG_COLUMN: !TABLE!
     PG_TABLE: !TABLE!
     DEPTH: 6
-    METHOD: midoc
     BB: [!XMIN!, !YMIN!, !ZMIN!, !XMAX!, !YMAX!, !ZMAX!]
-    LIMIT: 10000
+    MAX_PATCHS_PER_QUERY: 1024
+    USE_MORTON: True
+    CACHE_DIR: /home/!USER!/.cache/lopocs/
+    POTREE_SCH_PCID_SCALE_01: 2
+    POTREE_SCH_PCID_SCALE_001: 3
+    STATS: False
+    STATS_SERVER_PORT: 6379

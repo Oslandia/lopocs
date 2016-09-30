@@ -2,7 +2,6 @@
 
 import yaml
 import sys
-from binascii import hexlify
 from struct import Struct, pack
 import codecs
 import io
@@ -10,9 +9,6 @@ from struct import pack
 import numpy as np
 import math
 import argparse
-import glob
-import pymorton
-import liblas
 
 from lopocs.database import Session
 
@@ -83,9 +79,18 @@ def regular_grid(infos, cell_params):
             yield [pa_minx, pa_miny, 0.0, side_x, side_y, 1.0, i, j]
 
 
+def interleave(n):
+    n &= 0x0000ffff
+    n = (n | (n << 8)) & 0x00FF00FF
+    n = (n | (n << 4)) & 0x0F0F0F0F
+    n = (n | (n << 2)) & 0x33333333
+    n = (n | (n << 1)) & 0x55555555
+    return n
+
+
 def morton_revert_code(x, y):
 
-    mcode = pymorton.interleave2(x, y)
+    mcode = interleave(x) | (interleave(y) << 1)
 
     mcode_str = "{0:b}".format(mcode)
     nfill = 16-len(mcode_str)

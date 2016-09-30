@@ -14,9 +14,9 @@
     },
     {
       "type":"writers.pgpointcloud",
-      "connection":"host=!HOST! dbname=!DB! user=!USER!",
+      "connection":"dbname=!DB! user=!USER!",
       "table":"!TABLE!",
-      "compression":"none",
+      "compression":"laz",
       "srid":"!SRID!",
       "overwrite":"false"
     }

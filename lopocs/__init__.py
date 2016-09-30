@@ -10,6 +10,7 @@ from yaml import load as yload
 
 from lopocs.app import api
 from lopocs.database import Session
+from lopocs.stats import Stats
 from lopocs.conf import Config
 
 # lopocs version
@@ -123,5 +124,8 @@ def create_app(env='Defaults'):
     app.register_blueprint(blueprint)
     Session.init_app(app)
     Config.init(app.config)
+
+    if Config.STATS:
+        Stats.init()
 
     return app

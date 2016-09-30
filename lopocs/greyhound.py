@@ -3,11 +3,13 @@ import json
 from flask import Response
 import numpy
 import struct
+import time
 from lazperf import buildNumpyDescription, Decompressor
 
 from .database import Session
 from . import utils
 from .conf import Config
+from .stats import Stats
 
 LOADER_GREYHOUND_MIN_DEPTH = 8
 
@@ -66,7 +68,19 @@ class GreyhoundRead(object):
             schema_pcid = Config.POTREE_SCH_PCID_SCALE_001
 
         # get points in database
-        read = get_points(box, offset, schema_pcid, lod)
+        if Config.STATS:
+            t0 = int(round(time.time() * 1000))
+        [read, npoints] = get_points(box, offset, schema_pcid, lod)
+        if Config.STATS:
+            t1 = int(round(time.time() * 1000))
+
+        # log stats
+        if npoints > 0 and Config.STATS:
+            stats = Stats.get()
+            stats_npoints = stats['npoints'] + npoints
+            Stats.set(stats_npoints, (t1-t0)+stats['time_msec'])
+            stats = Stats.get()
+            print("Points/sec: ", stats['rate_sec'])
 
         # build flask response
         resp = Response(read)
@@ -91,6 +105,9 @@ class GreyhoundHierarchy(object):
                     .format(Session.dbname, lod_min, lod_max,
                             '_'.join(str(e) for e in bbox)))
         cached_hcy = utils.read_in_cache(filename)
+
+        if Config.DEBUG:
+            print("hierarchy file: {0}".format(filename))
 
         if cached_hcy:
             resp = Response(json.dumps(cached_hcy))
@@ -223,7 +240,7 @@ def get_points(box, offset, schema_pcid, lod):
         print("DEPTH: ", Config.DEPTH)
         print("NUM POINTS RETURNED: ", npoints)
 
-    return hexbuffer
+    return [hexbuffer, npoints]
 
 
 def fake_hierarchy(begin, end, npatchs):

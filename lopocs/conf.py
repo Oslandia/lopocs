@@ -14,6 +14,8 @@ class Config(object):
     POTREE_SCH_PCID_SCALE_001 = 2  # scale 0.01
     USE_MORTON = True
     DEBUG = False
+    STATS = True
+    STATS_SERVER_PORT = 6379
 
     @classmethod
     def init(cls, config):
@@ -53,3 +55,9 @@ class Config(object):
 
         if 'DEBUG' in config:
             cls.DEBUG = config['DEBUG']
+
+        if 'STATS' in config:
+            cls.STATS = config['STATS']
+
+        if 'STATS_SERVER_PORT' in config:
+            cls.STATS_SERVER_PORT = config['STATS_SERVER_PORT']
