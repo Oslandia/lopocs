@@ -11,6 +11,7 @@ Light OpenSource PointCloud Server
 * pytest-flask
 * pygdal
 * lazperf
+* redis / redis-server
 
 ## Usage
 
