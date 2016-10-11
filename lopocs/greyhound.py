@@ -363,11 +363,13 @@ def decompress(points):
 
     decompressed_str = numpy.ndarray.tostring(decompressed)
 
-    for i in range(0, npoints):
-        point = decompressed_str[dtype.itemsize*i:dtype.itemsize*(i+1)]
-        x = point[0:4]
-        y = point[4:8]
-        z = point[8:12]
-        xd = struct.unpack("i", x)
-        yd = struct.unpack("i", y)
-        zd = struct.unpack("i", z)
+    # for i in range(0, npoints):
+    #     point = decompressed_str[dtype.itemsize*i:dtype.itemsize*(i+1)]
+    #     x = point[0:4]
+    #     y = point[4:8]
+    #     z = point[8:12]
+    #     xd = struct.unpack("i", x)
+    #     yd = struct.unpack("i", y)
+    #     zd = struct.unpack("i", z)
+
+    return [decompressed_str, dtype.itemsize]

@@ -2,6 +2,7 @@
 from flask_restplus import Api, Resource, reqparse
 
 from . import greyhound
+from . import threedtiles
 
 api = Api(version='0.1', title='LOPoCS API',
           description='API for accessing LOPoCS',)
@@ -62,3 +63,35 @@ class Hierarchy(Resource):
     def get(self):
         args = greyhound_hierarchy_parser.parse_args()
         return greyhound.GreyhoundHierarchy().run(args)
+
+# -----------------------------------------------------------------------------
+# threedtiles api
+# -----------------------------------------------------------------------------
+threedtiles_ns = api.namespace('3dtiles/',
+                               description='3DTiles format')
+
+
+# info
+@threedtiles_ns.route("/info")
+class ThreeDTilesInfo(Resource):
+
+    def get(self):
+        return threedtiles.ThreeDTilesInfo().run()
+
+
+# read
+threedtiles_read_parser = reqparse.RequestParser()
+threedtiles_read_parser.add_argument('v', type=float, required=True)
+threedtiles_read_parser.add_argument('bounds', type=str, required=True)
+threedtiles_read_parser.add_argument('lod', type=int, required=True)
+threedtiles_read_parser.add_argument('offsets', type=str, required=True)
+threedtiles_read_parser.add_argument('scale', type=float, required=True)
+
+
+@threedtiles_ns.route("/read.pnts")
+class ThreeDTilesRead(Resource):
+
+    @api.expect(threedtiles_read_parser, validate=True)
+    def get(self):
+        args = threedtiles_read_parser.parse_args()
+        return threedtiles.ThreeDTilesRead().run(args)

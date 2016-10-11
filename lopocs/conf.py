@@ -17,6 +17,8 @@ class Config(object):
     STATS = True
     STATS_SERVER_PORT = 6379
 
+    CESIUM_COLOR = "colors"
+
     @classmethod
     def init(cls, config):
 
@@ -61,3 +63,6 @@ class Config(object):
 
         if 'STATS_SERVER_PORT' in config:
             cls.STATS_SERVER_PORT = config['STATS_SERVER_PORT']
+
+        if 'CESIUM_COLOR' in config:
+            cls.CESIUM_COLOR = config['CESIUM_COLOR']

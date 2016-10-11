@@ -11,6 +11,7 @@ DO_HIERARCHY=1
 
 PWD=""
 DBBUILDER_ROOT=$(dirname $(readlink -f $0))
+CESIUM_EPSG_OUTPUT=4978
 
 # -----------------------------------------------------------------------------
 # read cli
@@ -70,8 +71,18 @@ do
       shift
     ;;
 
+    -target)
+      TARGET="$2"
+      shift
+    ;;
+
     -pwd)
       PWD="$2"
+      shift
+    ;;
+
+    -lodmax)
+      LODMAX="$2"
       shift
     ;;
 
@@ -84,10 +95,10 @@ do
 done
 
 if [ -z "$TABLE" ] || [ -z "$DB" ] || [ -z "$HOST" ] || [ -z "$USR" ] \
-  || [ -z "$SIZE" ] || [ -z "$FILES" ] || [ -z "$VENV" ]
+  || [ -z "$SIZE" ] || [ -z "$FILES" ] || [ -z "$VENV" ] || [ -z "$TARGET" ]
 then
   echo "Invalid usage: "
-  echo "  dbbuilder -db db -table table -host host -user user -size size -files files -venv venv"
+  echo "  dbbuilder -db db -table table -host host -user user -size size -files files -venv venv -target target"
   exit
 fi
 
@@ -123,10 +134,16 @@ then
     FILENAME_BASE=$(echo $FILENAME | cut -f 1 -d '.')
     PIPE_NAME="$FILENAME_BASE""_pipe.json"
 
-    cp pipe.json.tpl $WDIR/$PIPE_NAME
+    if [ "$TARGET" = "3dtiles" ]
+    then
+      cp $DBBUILDER_ROOT/pipe.json.tpl_3dtiles $WDIR/$PIPE_NAME
+    else
+      cp $DBBUILDER_ROOT/pipe.json.tpl $WDIR/$PIPE_NAME
+    fi
 
     sed -i -e "s@!LAZFILE!@$f@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!SRID!@$SRID@g" $WDIR/$PIPE_NAME
+    sed -i -e "s@!CESIUM_SRID!@$CESIUM_EPSG_OUTPUT@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!SIZE!@$SIZE@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!TABLE!@$TABLE@g" $WDIR/$PIPE_NAME
     sed -i -e "s@!USER!@$USR@g" $WDIR/$PIPE_NAME
@@ -146,6 +163,10 @@ ZMIN=9999999.9
 XMAX=0.0
 YMAX=0.0
 ZMAX=0.0
+
+XTMP=0.0
+YTMP=0.0
+ZTMP=0.0
 
 XOFFSET=0.0
 YOFFSET=0.0
@@ -196,9 +217,35 @@ then
     fi
   done
 
-  XOFFSET=$(echo "$XMIN + ($XMAX-$XMIN)/2" | bc)
-  YOFFSET=$(echo "$YMIN + ($YMAX-$YMIN)/2" | bc)
-  ZOFFSET=$(echo "$ZMIN + ($ZMAX-$ZMIN)/2" | bc)
+  if [ "$TARGET" = "3dtiles" ]
+  then
+    XTMP=$(echo "$XMIN $YMIN $ZMIN" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 1)
+    YTMP=$(echo "$XMIN $YMIN $ZMIN" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 2)
+    ZTMP=$(echo "$XMIN $YMIN $ZMIN" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 3)
+    XMIN=$XTMP
+    YMIN=$YTMP
+    ZMIN=$ZTMP
+
+    XTMP=$(echo "$XMAX $YMAX $ZMAX" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 1)
+    YTMP=$(echo "$XMAX $YMAX $ZMAX" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 2)
+    ZTMP=$(echo "$XMAX $YMAX $ZMAX" |  gdaltransform -s_srs EPSG:$SRID \
+      -t_srs EPSG:$CESIUM_EPSG_OUTPUT | cut -d " " -f 3)
+    XMAX=$XTMP
+    YMAX=$YTMP
+    ZMAX=$ZTMP
+  fi
+
+  XOFFSET=$(echo "$XMIN + ($XMAX - $XMIN)/2" | bc)
+  YOFFSET=$(echo "$YMIN + ($YMAX - $YMIN)/2" | bc)
+  ZOFFSET=$(echo "$ZMIN + ($ZMAX - $ZMIN)/2" | bc)
+
+  echo "BBOX: [$XMIN, $YMIN, $ZMIN, $XMAX, $YMAX, $ZMAX]"
+  echo "OFFSETS: [$XOFFSET, $YOFFSET, $ZOFFSET]"
 
   echo "  => done"
 fi
@@ -211,19 +258,37 @@ then
   echo "Init the database..."
 
   cp $DBBUILDER_ROOT/potree_schema_scale_01.sql $WDIR
-  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_01.sql
+
+  if [ "$TARGET" = "3dtiles" ]
+  then
+    sed -i -e "s@!SRID!@$CESIUM_EPSG_OUTPUT@g" $WDIR/potree_schema_scale_01.sql
+  else
+    sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_01.sql
+  fi
+
   sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema_scale_01.sql
   sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema_scale_01.sql
   sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema_scale_01.sql
 
   cp $DBBUILDER_ROOT/potree_schema_scale_001.sql $WDIR
-  sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_001.sql
+  if [ "$TARGET" = "3dtiles" ]
+  then
+    sed -i -e "s@!SRID!@$CESIUM_EPSG_OUTPUT@g" $WDIR/potree_schema_scale_001.sql
+  else
+    sed -i -e "s@!SRID!@$SRID@g" $WDIR/potree_schema_scale_001.sql
+  fi
+
   sed -i -e "s@!XOFFSET!@$XOFFSET@g" $WDIR/potree_schema_scale_001.sql
   sed -i -e "s@!YOFFSET!@$YOFFSET@g" $WDIR/potree_schema_scale_001.sql
   sed -i -e "s@!ZOFFSET!@$ZOFFSET@g" $WDIR/potree_schema_scale_001.sql
 
   cp $DBBUILDER_ROOT/cell_schema.sql $WDIR
-  sed -i -e "s@!SRID!@$SRID@g" $WDIR/cell_schema.sql
+  if [ "$TARGET" = "3dtiles" ]
+  then
+    sed -i -e "s@!SRID!@$CESIUM_EPSG_OUTPUT@g" $WDIR/cell_schema.sql
+  else
+    sed -i -e "s@!SRID!@$SRID@g" $WDIR/cell_schema.sql
+  fi
 
   dropdb $DB > /dev/null
   createdb $DB > /dev/null
@@ -280,6 +345,7 @@ then
   sed -i -e "s@!XMAX!@$XMAX@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!YMAX!@$YMAX@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!ZMAX!@$ZMAX@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!LODMAX!@$LODMAX@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@\t@ @g" $WDIR/lopocs.yml.$DB
 
   echo "  => done"
@@ -302,9 +368,9 @@ fi
 # -----------------------------------------------------------------------------
 if [ $DO_HIERARCHY -eq 1 ]
 then
-  echo "Build a greyhound hierarchy..."
+  echo "Build a hierarchy/tileset..."
 
-  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lopocs.yml.$DB $WDIR
+  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lopocs.yml.$DB $WDIR $TARGET
 
   echo "  => done"
 fi

@@ -8,7 +8,7 @@ flask:
     PG_PASSWORD: !PWD!
     PG_COLUMN: !TABLE!
     PG_TABLE: !TABLE!
-    DEPTH: 6
+    DEPTH: !LODMAX!
     BB: [!XMIN!, !YMIN!, !ZMIN!, !XMAX!, !YMAX!, !ZMAX!]
     MAX_PATCHS_PER_QUERY: 1024
     USE_MORTON: True
