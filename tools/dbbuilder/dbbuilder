@@ -31,6 +31,11 @@ do
       shift
     ;;
 
+    -uwsgiuser)
+      UWSGIUSR="$2"
+      shift
+    ;;
+
     -host)
       HOST="$2"
       shift
@@ -105,6 +110,11 @@ fi
 # -----------------------------------------------------------------------------
 # default values for optional parameters
 # -----------------------------------------------------------------------------
+if [ -z "$UWSGIUSR" ]
+then
+  UWSGIUSR=$USR
+fi
+
 if [ -z "$WDIR" ]
 then
   WDIR=/tmp/dbbuilder
@@ -115,6 +125,9 @@ then
   SRID="4326"
 fi
 
+# -----------------------------------------------------------------------------
+# reset working directory
+# -----------------------------------------------------------------------------
 if [ $DO_DEL -eq 1 ]
 then
   rm -rf $WDIR
@@ -338,7 +351,7 @@ then
   sed -i -e "s@!PWD!@$PWD@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!HOST!@$HOST@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!DB!@$DB@g" $WDIR/lopocs.yml.$DB
-  sed -i -e "s@!USER!@$USR@g" $WDIR/lopocs.yml.$DB
+  sed -i -e "s@!UWSGIUSER!@$UWSGIUSR@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!XMIN!@$XMIN@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!YMIN!@$YMIN@g" $WDIR/lopocs.yml.$DB
   sed -i -e "s@!ZMIN!@$ZMIN@g" $WDIR/lopocs.yml.$DB
