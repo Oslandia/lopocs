@@ -291,7 +291,7 @@ def children(baseurl, lod_max, offsets, bbox, lod):
         children_list = []
         if lod <= lod_max:
             for bb in split_bbox(bbox, lod):
-                json_children = children(lod_max, offsets, bb, lod)
+                json_children = children(baseurl, lod_max, offsets, bb, lod)
 
                 if len(json_children):
                     children_list.append(json_children)
