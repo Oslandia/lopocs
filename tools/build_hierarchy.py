@@ -25,6 +25,9 @@ if __name__ == '__main__':
     target_help = "Target for the hierarchy (greyhound or 3dtiles)"
     parser.add_argument('t', metavar='t', type=str, help=target_help)
 
+    baseurl_help = "Base URL of the lopocs instance to use"
+    parser.add_argument('u', metavar='u', type=str, help=baseurl_help)
+
     args = parser.parse_args()
 
     # open config file
@@ -67,7 +70,8 @@ if __name__ == '__main__':
         f.write(json.dumps(h))
         f.close()
     else:
-        h = threedtiles.build_hierarchy_from_pg(lod_max, bbox, lod_min)
+        baseurl = args.u
+        h = threedtiles.build_hierarchy_from_pg(baseurl, lod_max, bbox, lod_min)
         name = "tileset.json"
 
         path = os.path.join(args.outdir, name)

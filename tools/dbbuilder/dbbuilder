@@ -91,6 +91,11 @@ do
       shift
     ;;
 
+    -cesium_baseurl)
+      CESIUM_BASEURL="$2"
+      shift
+    ;;
+
     *)
       # unknown option
     ;;
@@ -110,6 +115,11 @@ fi
 # -----------------------------------------------------------------------------
 # default values for optional parameters
 # -----------------------------------------------------------------------------
+if [ -z "$CESIUM_BASEURL" ]
+then
+  CESIUM_BASEURL="http://127.0.0.1/"
+fi
+
 if [ -z "$UWSGIUSR" ]
 then
   UWSGIUSR=$USR
@@ -383,7 +393,7 @@ if [ $DO_HIERARCHY -eq 1 ]
 then
   echo "Build a hierarchy/tileset..."
 
-  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lopocs.yml.$DB $WDIR $TARGET
+  python3 $DBBUILDER_ROOT/../build_hierarchy.py $WDIR/lopocs.yml.$DB $WDIR $TARGET $CESIUM_BASEURL
 
   echo "  => done"
 fi

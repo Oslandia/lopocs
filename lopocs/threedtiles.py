@@ -183,7 +183,7 @@ def sql_query(box, schema_pcid, lod):
     return sql
 
 
-def build_hierarchy_from_pg(lod_max, bbox, lod):
+def build_hierarchy_from_pg(baseurl, lod_max, bbox, lod):
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
     tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT # (lod_max+2)*20 - (lod+1)*20
@@ -201,8 +201,8 @@ def build_hierarchy_from_pg(lod_max, bbox, lod):
     offsets_str = "offsets=[{0},{1},{2}]".format(center_x, center_y, center_z)
     scale = "scale={0}".format(0.01)
 
-    base_url = "http://192.168.1.14:5000/3dtiles/read.pnts"
-    url = "{0}?{1}&{2}&{3}&{4}".format(base_url, lod_str, bounds, offsets_str, scale)
+    baseurl = "{0}/3dtiles/read.pnts".format(baseurl)
+    url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod_str, bounds, offsets_str, scale)
 
     root = {}
     root["refine"] = "add"
@@ -213,7 +213,7 @@ def build_hierarchy_from_pg(lod_max, bbox, lod):
     lod = 1
     children_list = []
     for bb in split_bbox(bbox, lod):
-        json_children = children(lod_max, offsets, bb, lod)
+        json_children = children(baseurl, lod_max, offsets, bb, lod)
         if len(json_children):
             children_list.append(json_children)
 
@@ -225,7 +225,7 @@ def build_hierarchy_from_pg(lod_max, bbox, lod):
     return json.dumps(tileset, indent=4, separators=(',', ': '))
 
 
-def build_children_section(offsets, bbox, err, lod):
+def build_children_section(baseurl, offsets, bbox, err, lod):
 
     cjson = {}
 
@@ -235,8 +235,8 @@ def build_children_section(offsets, bbox, err, lod):
     offsets_str = "offsets=[{0},{1},{2}]".format(offsets[0], offsets[1], offsets[2])
     scale = "scale={0}".format(0.01)
 
-    base_url = "http://192.168.1.14:5000/3dtiles/read.pnts"
-    url = "{0}?{1}&{2}&{3}&{4}".format(base_url, lod, bounds, offsets_str, scale)
+    baseurl = "{0}/3dtiles/read.pnts".format(baseurl)
+    url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod, bounds, offsets_str, scale)
 
     bvol = {}
     bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
@@ -260,11 +260,6 @@ def split_bbox(bbox, lod):
     x = bbox[0]
     y = bbox[1]
 
-    # bbox_nw = [x, y+length/2, down, x+width/2, y+length, up]
-    # bbox_ne = [x+width/2, y+length/2, down, x+width, y+length, up]
-    # bbox_sw = [x, y, down, x+width/2, y+length/2, up]
-    # bbox_se = [x+width/2, y, down, x+width, y+length/2, up]
-
     bbox_nwd = [x, y+length/2, down, x+width/2, y+length, middle]
     bbox_nwu = [x, y+length/2, middle, x+width/2, y+length, up]
     bbox_ned = [x+width/2, y+length/2, down, x+width, y+length, middle]
@@ -274,16 +269,11 @@ def split_bbox(bbox, lod):
     bbox_sed = [x+width/2, y, down, x+width, y+length/2, middle]
     bbox_seu = [x+width/2, y, middle, x+width, y+length/2, up]
 
-    # if lod == 2:
     return [bbox_nwd, bbox_nwu, bbox_ned, bbox_neu, bbox_swd, bbox_swu,
             bbox_sed, bbox_seu]
-    # else:
-    #     return [bbox_swd, bbox_swu]
-
-    # return [bbox_nw, bbox_ne, bbox_sw, bbox_se]
 
 
-def children(lod_max, offsets, bbox, lod):
+def children(baseurl, lod_max, offsets, bbox, lod):
 
     # run sql
     sql = sql_query(bbox, Config.POTREE_SCH_PCID_SCALE_001, lod)
@@ -294,7 +284,7 @@ def children(lod_max, offsets, bbox, lod):
         npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
         if npoints > 0:
             err = GEOMETRIC_ERROR_DEFAULT/(2*(lod+1))
-            json_me = build_children_section(offsets, bbox, err, lod)
+            json_me = build_children_section(baseurl, offsets, bbox, err, lod)
 
         lod += 1
 
