@@ -201,8 +201,8 @@ def build_hierarchy_from_pg(baseurl, lod_max, bbox, lod):
     offsets_str = "offsets=[{0},{1},{2}]".format(center_x, center_y, center_z)
     scale = "scale={0}".format(0.01)
 
-    baseurl = "{0}/3dtiles/read.pnts".format(baseurl)
-    url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod_str, bounds, offsets_str, scale)
+    base_url = "{0}/3dtiles/read.pnts".format(baseurl)
+    url = "{0}?{1}&{2}&{3}&{4}".format(base_url, lod_str, bounds, offsets_str, scale)
 
     root = {}
     root["refine"] = "add"
