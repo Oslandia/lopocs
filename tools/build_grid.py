@@ -187,6 +187,11 @@ def build_index_by_morton(infos, side_x, side_y):
         Session.db.cursor().execute(sql)
 
 
+def create_index():
+    sql = "create index on pa(morton);"
+    Session.db.cursor().execute(sql)
+
+
 if __name__ == '__main__':
 
     # arg parse
@@ -230,3 +235,4 @@ if __name__ == '__main__':
 
     # associate a patch of data with a cell
     build_index_by_morton(infos, cell_params[1], cell_params[2])
+    create_index()
