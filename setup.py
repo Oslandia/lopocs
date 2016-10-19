@@ -16,7 +16,7 @@ requirements = (
     'flask-restplus==0.9.2',
     'psycopg2==2.6.1',
     'pyyaml',
-    'pygdal~={}'.format(GDAL_VERSION)
+    'pygdal=={}'.format(GDAL_VERSION)
 )
 
 dev_requirements = (
