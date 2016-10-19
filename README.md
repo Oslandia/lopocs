@@ -11,28 +11,20 @@ The current version of Lopocs provides a way to load Point Cloud from Postgis in
 * Cesium thanks to the 3DTiles format
 
 
-## Requirements
-
-Mandatory:
-
-* flask
-* flask-restplus
-* psycopg2
-* pyyaml
-* pytest
-* pytest-flask
-* pygdal
-* lazperf
-
-Optional:
-
-* redis / redis-server
-
-
-## Usage
-
-### Run
+## Install dependencies
 
 ```
-uwsgi --yml conf/lopocs.uwsgi.yml
+cd lopocs
+virtualenv -p /usr/bin/python3 venv
+. venv/bin/activate
+(venv) pip install -e .
+```
+
+## Run
+
+```
+cd lopocs
+. venv/bin/activate
+(venv) pip install uwsgi
+(venv) uwsgi --yml conf/lopocs.uwsgi.yml
 ```
