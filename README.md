@@ -1,3 +1,6 @@
+ [![Build Status](https://secure.travis-ci.org/LI3DS/lopocs.png)]
+ (https://travis-ci.org/LI3DS/lopocs)
+
 <p align="center">
 <img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/lopocs.png" width="400">
 </p>
