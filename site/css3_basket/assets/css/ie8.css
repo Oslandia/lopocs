@@ -1,0 +1,73 @@
+/* List */
+
+	ul.style1 {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+		ul.style1 .right {
+			position: relative;
+			-ms-behavior: url("assets/js/ie/PIE.htc");
+		}
+
+	ul.icons {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+		ul.icons li a {
+			position: relative;
+			-ms-behavior: url("assets/js/ie/PIE.htc");
+		}
+
+/* Form */
+
+	form input.text,
+	form select,
+	form textarea {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+/* Button */
+
+	.button {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+	.button2 {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+/* Header */
+
+	#logo .pennant span {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+	.dropotron {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+/* Main */
+
+	#main .box {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+	#main .image img {
+		position: relative;
+		-ms-behavior: url("assets/js/ie/PIE.htc");
+	}
+
+/* List */
+
+	ul.style1 .fa:before {
+		font-size: 2.1em;
+		padding-top: 0.2em;
+	}
