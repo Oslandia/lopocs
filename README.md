@@ -26,6 +26,9 @@ Developments are still going on to improve state-of-the-art algorithms and
 performances.
 
 
+[Online demonstration](https://li3ds.github.io/lopocs/ "Online demonstration")
+
+
 ## Install
 
 ### From source
