@@ -2,7 +2,6 @@
 import json
 from flask import Response
 import numpy
-import struct
 import time
 from lazperf import buildNumpyDescription, Decompressor
 
@@ -363,6 +362,7 @@ def decompress(points):
 
     decompressed_str = numpy.ndarray.tostring(decompressed)
 
+    # import struct
     # for i in range(0, npoints):
     #     point = decompressed_str[dtype.itemsize*i:dtype.itemsize*(i+1)]
     #     x = point[0:4]

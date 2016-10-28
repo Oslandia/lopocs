@@ -77,20 +77,70 @@ spawned uWSGI worker 1 (pid: 5984, cores: 1)
 
 ```
 
-## Swagger
+To test your installation:
+
+```
+$ curl http://localhost:5000/infos/online
+"Congratulation, LOPoCS is online!!!"
+```
+
+## API and Swagger
+
+Each viewer has specific expectations and communication protocol. So, the API
+is built to meet these specific needs.
+
+Currently, 2 kinds of formats are supported:
+- 3DTiles
+- Greyhound format (LAZ data with a footer indicating the number of points)
+
+LOPoCS is able to stream data up to 3 viewers:
+- Potree viewer with the Greyhound format
+- iTowns2 with the Greyhound format
+- Cesium with the 3DTiles format
 
 LOPoCS provides its RESTful API through a Swagger UI:
 
-TODO: screenshot
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api.png" width="400">
+</p>
 
-### Default Namespace
+There's three namespace:
+- **infos**: to retrieve informations about LOPoCS (contact, ...)
+- **greyhound**: to communicate with LOPoCS according to the Greyhound format
+- **3dtiles**: to communicate with LOPoCS according to the 3DTiles format
 
-TODO
+### Infos Namespace
+
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_infos.png" width="400">
+</p>
+
+You can retrieve simple information about LOPoCS through this namespace. There
+are no settings in this case, just simple query:
+
+```
+$ curl http://localhost:5000/infos/contact
+"infos+li3ds@oslandia.com"
+```
 
 ### Greyhound Namespace
 
-TODO
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_greyhound.png" width="400">
+</p>
+
+The greyhound namespace provides 3 points of entry:
+- info: returns information about the dataset served by the server in JSON
+- hierarchy: returns the description of the dataset according to an octree in JSON
+- read: returns points in LAZ format
+
 
 ### 3DTiles Namespace
 
-TODO
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_3dtiles.png" width="400">
+</p>
+
+The 3dtiles namespace provides 2 points of entry:
+- info: returns information about the dataset in JSON
+- read.pnts: returns points in 3DTiles Point Cloud format

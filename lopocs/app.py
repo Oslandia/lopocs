@@ -11,11 +11,29 @@ api = Api(version='0.1', title='LOPoCS API',
 # -----------------------------------------------------------------------------
 # basic api
 # -----------------------------------------------------------------------------
-@api.route("/lopocs")
-class Test(Resource):
+infos_ns = api.namespace('infos/',
+                         description='Information about LOPoCS')
+
+
+@infos_ns.route("/global")
+class InfosGlobal(Resource):
 
     def get(self):
         return "Light OpenSource PointCloud Server / Oslandia"
+
+
+@infos_ns.route("/contact")
+class InfosContact(Resource):
+
+    def get(self):
+        return "infos+li3ds@oslandia.com"
+
+
+@infos_ns.route("/online")
+class InfosOnline(Resource):
+
+    def get(self):
+        return "Congratulation, LOPoCS is online!!!"
 
 # -----------------------------------------------------------------------------
 # greyhound api

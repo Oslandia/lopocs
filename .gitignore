@@ -1,3 +1,5 @@
 lopocs.egg-info/
 dist/
 venv/
+conf/lopocs.uwsgi.yml
+conf/lopocs.yml
