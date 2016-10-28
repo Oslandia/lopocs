@@ -112,7 +112,7 @@ There's three namespace:
 ### Infos Namespace
 
 <p align="center">
-<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_infos.png" width="400">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_infos.png" width="700">
 </p>
 
 You can retrieve simple information about LOPoCS through this namespace. There
@@ -126,7 +126,7 @@ $ curl http://localhost:5000/infos/contact
 ### Greyhound Namespace
 
 <p align="center">
-<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_greyhound.png" width="400">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_greyhound.png" width="700">
 </p>
 
 The **greyhound** namespace provides 3 points of entry:
@@ -138,7 +138,7 @@ The **greyhound** namespace provides 3 points of entry:
 ### 3DTiles Namespace
 
 <p align="center">
-<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_3dtiles.png" width="400">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_3dtiles.png" width="700">
 </p>
 
 The **3dtiles** namespace provides 2 points of entry:
