@@ -101,7 +101,7 @@ LOPoCS is able to stream data up to 3 viewers:
 LOPoCS provides its RESTful API through a Swagger UI:
 
 <p align="center">
-<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api.png" width="400">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api.png" width="700">
 </p>
 
 There's three namespace:
@@ -129,7 +129,7 @@ $ curl http://localhost:5000/infos/contact
 <img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_greyhound.png" width="400">
 </p>
 
-The greyhound namespace provides 3 points of entry:
+The **greyhound** namespace provides 3 points of entry:
 - info: returns information about the dataset served by the server in JSON
 - hierarchy: returns the description of the dataset according to an octree in JSON
 - read: returns points in LAZ format
@@ -141,6 +141,6 @@ The greyhound namespace provides 3 points of entry:
 <img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api_3dtiles.png" width="400">
 </p>
 
-The 3dtiles namespace provides 2 points of entry:
+The **3dtiles** namespace provides 2 points of entry:
 - info: returns information about the dataset in JSON
 - read.pnts: returns points in 3DTiles Point Cloud format
