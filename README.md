@@ -33,6 +33,7 @@ performances.
 To install LOPoCS from source:
 
 ```
+$ sudo apt-get install libgdal-dev
 $ git clone https://github.com/LI3DS/lopocs
 $ cd lopocs
 $ virtualenv -p /usr/bin/python3 venv
@@ -49,11 +50,28 @@ If you want to run unit tests:
 
 ## How to run
 
-LOPoCS has been tested with uWSGI and Nginx:
+LOPoCS has been tested with uWSGI and Nginx.
+
+Once files *lopocs.uwsgi.yml* and *lopocs.yml* are well configurated for your
+environment, you can run LOPoCS:
 
 ```
-(venv) pip install uwsgi
-(venv) uwsgi --yml conf/lopocs.uwsgi.yml
+(venv)$ pip install uwsgi
+(venv)$ uwsgi --yml conf/lopocs.uwsgi.yml
+spawned uWSGI worker 1 (pid: 5984, cores: 1)
+
+```
+
+In case of the next error:
+
+```
+(venv)$ uwsgi --yml conf/lopocs.uwsgi.yml
+ImportError: No module named site
+(venv)$ deactivate
+(venv)$ . venv/bin/activate
+(venv)$ uwsgi --yml conf/lopocs.uwsgi.yml
+spawned uWSGI worker 1 (pid: 5984, cores: 1)
+
 ```
 
 ## Swagger
