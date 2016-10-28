@@ -30,7 +30,7 @@ performances.
 
 ### From source
 
-To install LOPoCS from source:
+To use LOPoCS from source:
 
 ```
 $ sudo apt-get install libgdal-dev
@@ -38,14 +38,17 @@ $ git clone https://github.com/LI3DS/lopocs
 $ cd lopocs
 $ virtualenv -p /usr/bin/python3 venv
 $ . venv/bin/activate
+(venv)$ pip install --upgrade pip
 (venv)$ pip install -e .
-(venv)$ python setup.py install
+(venv)$ pip install -e "git+https://github.com/hobu/laz-perf#egg=lazperf&subdirectory=python"
 ```
 
 If you want to run unit tests:
 
 ```
-(venv)$ python setup.py test
+(venv)$ pip install nose
+(venv)$ nosetests
+...
 ```
 
 ## How to run

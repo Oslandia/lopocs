@@ -16,10 +16,9 @@ requirements = (
     'flask-restplus==0.9.2',
     'psycopg2==2.6.1',
     'pyyaml',
-    'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX)
+    'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
+    'redis',
 )
-
-print(requirements)
 
 dev_requirements = (
     'pytest',
@@ -73,6 +72,7 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     packages=find_packages(),
+    test_suite='tests',
     install_requires=requirements,
     extras_require={
         'dev': dev_requirements,
