@@ -98,7 +98,8 @@ LOPoCS is able to stream data up to 3 viewers:
 - iTowns2 with the Greyhound format
 - Cesium with the 3DTiles format
 
-LOPoCS provides its RESTful API through a Swagger UI:
+LOPoCS provides its RESTful API through a Swagger UI by default on
+*http://localhost:5000*:
 
 <p align="center">
 <img align="center" src="https://github.com/LI3DS/lopocs/blob/master/docs/api.png" width="700">
