@@ -31,9 +31,9 @@ performances.
 
 ## Install
 
-### From source
+### From sources
 
-To use LOPoCS from source:
+To use LOPoCS from sources:
 
 ```
 $ sudo apt-get install libgdal-dev
