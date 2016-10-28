@@ -12,5 +12,6 @@ install:
   - pip install --upgrade pip
   - pip install -e .
   - pip install -e "git+https://github.com/hobu/laz-perf#egg=lazperf&subdirectory=python"
+  - pip install -e "git+https://github.com/pblottiere/py3dtiles#egg=py3dtiles"
 
 script: nosetests
