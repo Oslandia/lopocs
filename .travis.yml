@@ -9,4 +9,8 @@ before_install:
   - sudo apt-get install libgdal-dev
 
 install:
+  - pip install --upgrade pip
   - pip install -e .
+  - pip install -e "git+https://github.com/hobu/laz-perf#egg=lazperf&subdirectory=python"
+
+scripts: nosetests
