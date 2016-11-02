@@ -26,7 +26,7 @@ Developments are still going on to improve state-of-the-art algorithms and
 performances.
 
 <p align="center">
-<img align="center" href="https://vimeo.com/189285883" src="https://github.com/LI3DS/lopocs/blob/master/docs/vimeo.png" width="400">
+<img align="center" href="https://vimeo.com/189285883" src="https://github.com/LI3DS/lopocs/blob/dev/docs/vimeo.png" width="400">
 </p>
 <br>
 
