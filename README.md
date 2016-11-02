@@ -25,6 +25,10 @@ is possible thanks to the python module
 Developments are still going on to improve state-of-the-art algorithms and
 performances.
 
+<p align="center">
+<img align="center" href="https://vimeo.com/189285883" src="https://github.com/LI3DS/lopocs/blob/master/docs/vimeo.png" width="400">
+</p>
+<br>
 
 [Online demonstration](https://li3ds.github.io/lopocs/ "Online demonstration")
 
