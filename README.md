@@ -26,7 +26,7 @@ The current version of LOPoCS provides a way to load Point Cloud from Postgis in
 Note that LOPoCS is currently the only 3DTiles server able to stream data from
 [pgpointcloud](https://github.com/pgpointcloud/pointcloud "pgpointcloud"). This
 is possible thanks to the python module
-[py3dtiles](https://github.com/pblottiere/py3dtiles "py3dtiles").
+[py3dtiles](https://github.com/Oslandia/py3dtiles "py3dtiles").
 
 Developments are still going on to improve state-of-the-art algorithms and
 performances.
