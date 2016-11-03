@@ -11,10 +11,10 @@ LOPoCS (Light Opensource PointCloud Server) is a point cloud server written in
 Python, allowing to load Point Cloud from Postgis thanks to the pgpointcloud
 extension.
 
-<p align="center">
-<img align="center" src="https://github.com/LI3DS/lopocs/blob/dev/docs/itowns_montreal1_header.png" width="400">
-</p>
 <br>
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/dev/docs/itowns_montreal1_header.png" width="700">
+</p>
 <br>
 
 The current version of LOPoCS provides a way to load Point Cloud from Postgis in:
