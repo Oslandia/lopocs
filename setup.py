@@ -64,7 +64,7 @@ setup(
     url='https://github.com/LI3DS/lopocs',
     author='dev',
     author_email='contact@oslandia.com',
-    license='GPLv3',
+    license='LGPLv2',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
