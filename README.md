@@ -11,6 +11,12 @@ LOPoCS (Light Opensource PointCloud Server) is a point cloud server written in
 Python, allowing to load Point Cloud from Postgis thanks to the pgpointcloud
 extension.
 
+<p align="center">
+<img align="center" src="https://github.com/LI3DS/lopocs/blob/dev/docs/itowns_montreal1_header.png" width="400">
+</p>
+<br>
+<br>
+
 The current version of LOPoCS provides a way to load Point Cloud from Postgis in:
 
 * [Potree viewer](http://www.potree.org/ "Potree viewer") viewer with LAZ compressed data
@@ -24,6 +30,8 @@ is possible thanks to the python module
 
 Developments are still going on to improve state-of-the-art algorithms and
 performances.
+
+[Video](https://vimeo.com/189285883 "Video")
 
 [Online demonstration](https://li3ds.github.io/lopocs/ "Online demonstration")
 
