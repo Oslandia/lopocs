@@ -155,3 +155,7 @@ The **greyhound** namespace provides 3 points of entry:
 The **3dtiles** namespace provides 2 points of entry:
 - info: returns information about the dataset in JSON
 - read.pnts: returns points in 3DTiles Point Cloud format
+
+## License
+
+LOPoCS is distributed under LPGL2 or later.

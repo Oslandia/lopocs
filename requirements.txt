@@ -4,3 +4,4 @@ pyyaml
 psycopg2
 pygdal
 redis
+py3dtiles

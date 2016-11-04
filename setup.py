@@ -18,6 +18,7 @@ requirements = (
     'pyyaml',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
+    'py3dtiles',
 )
 
 dev_requirements = (
@@ -64,7 +65,7 @@ setup(
     url='https://github.com/LI3DS/lopocs',
     author='dev',
     author_email='contact@oslandia.com',
-    license='LGPLv2',
+    license='LGPL2 or later',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
