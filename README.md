@@ -38,6 +38,7 @@ performances.
 
 ## Install
 
+[FromSources](#fromsources)
 ### From sources
 
 To use LOPoCS from sources:
@@ -60,6 +61,14 @@ If you want to run unit tests:
 (venv)$ nosetests
 ...
 ```
+
+In order to have an efficient and a reactive streaming, we've made some
+development in PDAL, pgpointcloud (such as the pc_range function) and Potree.
+Some of these developments are not merged in upstream projects yet (but of
+course, it's the intention). So you have to use these forks to correctly run lopocs:
+- https://github.com/LI3DS/pointcloud
+- https://github.com/LI3DS/PDAL
+- https://github.com/LI3DS/potree
 
 ## How to run
 
@@ -155,6 +164,110 @@ The **greyhound** namespace provides 3 points of entry:
 The **3dtiles** namespace provides 2 points of entry:
 - info: returns information about the dataset in JSON
 - read.pnts: returns points in 3DTiles Point Cloud format
+
+
+## Full example
+
+The aim of this part is to provide a full example on how to fill the database
+and configure LOPoCS to stream point clouds.
+
+
+### Download a LAS file
+
+The first step is to download the LAS file that we are going to use
+*LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las*:
+
+```
+$ cd example
+$ sh get_las.sh
+http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las
+Resolving www.liblas.org (www.liblas.org)... 52.216.225.130
+Connecting to www.liblas.org (www.liblas.org)|52.216.225.130|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 99099473 (95M) [binary/octet-stream]
+Saving to: ‘LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las’
+```
+
+### Create the database
+
+The second step is:
+- creating the *pc_sthelens * database
+- loading the necessary extensions like postgis or pointcloud
+- adding two schemas to send data towards Potree
+
+To do that, just run the next command:
+
+```
+$ cd example
+$ sh initdb.sh
+```
+
+
+### Fill the database with PDAL
+
+During this third step, we're going to build patchs of points and fill
+the database previsouly created thanks to a PDAL pipeline:
+
+```
+$ cd example
+$ pdal pipeline -i pipeline.json
+```
+
+In this pipeline, we have:
+- a LAS reader
+- a chipper filter building patchs with 500 points each
+- a midoc filter ordering points by LOD within a patch
+- a pgpointcloud writer
+
+
+### Build a hierarchy file
+
+Potree needs a hierarchy to correctly allocate the memory. This hierarchy has
+to be generated and paste in the LOPoCS cache directory.
+
+```
+$ cd example
+$ sh hierarchy.sh
+```
+
+The cache directory */tmp/lopocs* is created and the generated hierarchy file is
+paste in it.
+
+```
+$ ls /tmp/lopocs
+TODO
+```
+
+### Configure UWSGI and run LOPoCS
+
+If you have followed the [Installation from source section](#fromsources), you
+should have a virtualenv directory *lopocs/venv*. This directory has to be
+indicated within the uwsgi configuration file. The next command prepare this
+file according to your current environment:
+
+```
+$ cd example
+$ sh prepare.sh
+```
+
+And finally, you can run LOPoCS:
+
+```
+$ cd example
+$ uwsgi -y lopocs.uwsgi.yml &
+$ curl http://localhost:5000/infos/online
+"Congratulation, LOPoCS is online!!!"
+```
+
+#### Potree
+
+
+
+### Advanced usage
+
+
+### dbbuilder
+
 
 ## License
 

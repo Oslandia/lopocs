@@ -1,0 +1,12 @@
+uwsgi:
+    virtualenv: !EXAMPLE_DIR!/../venv/
+    master: true
+    socket: 127.0.0.1:5000
+    protocol: http
+    module: lopocs.wsgi:app
+    processes: 2
+    enable-threads: true
+    lazy-apps: true
+    need-app: true
+    catch: exceptions=true
+    env: LOPOCS_SETTINGS=!EXAMPLE_DIR!/lopocs.yml
