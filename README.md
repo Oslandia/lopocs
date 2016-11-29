@@ -168,10 +168,11 @@ The **3dtiles** namespace provides 2 points of entry:
 - read.pnts: returns points in 3DTiles Point Cloud format
 
 
-## lopocs_builder tool
+## lopocs_builder
 
-The aim of **lopocs_builder** is to prepare the database for LOPoCS in a single
-step.
+The aim of **lopocs_builder** is to prepare the database for LOPoCS, fill the
+database thanks to PDAL and make some processing computation in a single
+command line.
 
 
 ### Usage
@@ -253,23 +254,16 @@ Run **lopocs_builder**:
 ...
 ```
 
-Run LOPoCS with UWSGI:
+Launch LOPoCS with UWSGI:
 
 ```
-(venv)$ uwsgi -y outdir/lopocs.uwsgi.yml
-```
-
-Then you can test if LOPoCS is well running:
-
-```
-(venv)$ curl http://localhost:5000/infos/online
-"Congratulation, LOPoCS is online!!!"
+(venv)$ uwsgi -y airport/lopocs.uwsgi.yml
 ```
 
 Finally, open Potree viewer with your favorite web browser:
 
 ```
-(venv)$ chromium airport/lopocs.html
+(venv)$ chromium airport/potree.html
 ```
 
 ## License

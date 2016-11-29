@@ -512,7 +512,7 @@ def potreeviewer(args):
                 line = line.replace(src, target)
             outfile.write(line)
 
-    os.symlink(dst, os.path.abspath(os.path.join(args.outdir, "lopocs.html")))
+    os.symlink(dst, os.path.abspath(os.path.join(args.outdir, "potree.html")))
 
     logger(res=True, valid=True)
 
@@ -586,7 +586,7 @@ if __name__ == '__main__':
                         help=lod_max_help, default=6)
 
     # lopocs
-    lp_cachedir_default = "'{}/.cache/lopocs/')".format(HOME)
+    lp_cachedir_default = "'{}/.cache/lopocs/'".format(HOME)
     lp_cachedir_help = ("LOPoCS cache directory (default: {})"
                         .format(lp_cachedir_default))
     parser.add_argument('-lopocs_cachedir', metavar='dir', type=str,
