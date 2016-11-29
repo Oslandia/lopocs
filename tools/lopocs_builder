@@ -1,0 +1,640 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# -----------------------------------------------------------------------------
+# imports
+# -----------------------------------------------------------------------------
+from shutil import copyfile
+import argparse
+from flask import Flask
+import shutil
+import subprocess
+import json
+import git
+import getpass
+import psycopg2
+from psycopg2.extras import NamedTupleCursor
+import os
+import glob
+import sys
+from multiprocessing import Pool
+
+SCRIPT_DIR=os.path.dirname(os.path.realpath(__file__))
+LOPOCS_MODULE_DIR=os.path.join(SCRIPT_DIR, "..")
+sys.path.append(LOPOCS_MODULE_DIR)
+
+from lopocs.database import Session
+from lopocs import greyhound
+from lopocs import threedtiles
+
+# -----------------------------------------------------------------------------
+# const
+# -----------------------------------------------------------------------------
+USER=getpass.getuser()
+HOME=os.path.expanduser("~")
+
+# -----------------------------------------------------------------------------
+# classes
+# -----------------------------------------------------------------------------
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+# -----------------------------------------------------------------------------
+# functions
+# -----------------------------------------------------------------------------
+def header(msg):
+    print()
+    print("============================================================")
+    print(msg)
+    print("============================================================")
+    print()
+
+def logger(msg='', res=False, valid=True, resmsg=''):
+    if not res:
+        print(msg + "...: ", end='')
+    else:
+        if valid:
+            if resmsg:
+                print(resmsg)
+            else:
+                print(bcolors.OKGREEN + "OK" + bcolors.ENDC)
+        else:
+            print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
+
+    sys.stdout.flush()
+
+def config_summary(args):
+
+    header("LOPoCS configuration")
+    print("General")
+    print(" - files: {}".format(args.files))
+    print(" - output directory: {}".format(args.outdir))
+    print(" - epsg code: EPSG:{}".format(args.epsg))
+    print()
+    print("Postgres")
+    print(" - host: {}".format(args.pg_host))
+    print(" - database: {}".format(args.pg_db))
+    print(" - port: {}".format(args.pg_port))
+    print(" - table: {}".format(args.pg_table))
+    print(" - user: {}".format(args.pg_user))
+    print(" - password: {}".format(args.pg_pwd))
+    print()
+    print("PDAL")
+    print(" - reader: {}".format(args.pdal_reader))
+    print(" - patch size: {}".format(args.pdal_patchsize))
+    print()
+    print("Morton")
+    print(" - grid size: {0}".format(args.morton_size))
+    print()
+    print("Hierarchy")
+    print(" - lod max: {0}".format(args.lod_max))
+    print()
+    print("LOPoCS")
+    print(" - cache directory: {}".format(args.lopocs_cachedir))
+    print()
+    print("UWSGI")
+    print(" - host: {}".format(args.uwsgi_host))
+    print(" - port: {}".format(args.uwsgi_port))
+    print(" - logfile: {}".format(args.uwsgi_log))
+    print(" - virtualenv: {}".format(args.uwsgi_venv))
+    print()
+    print("Viewer(s)")
+    print(" - PotreeViewer: {}".format(args.potreeviewer))
+
+def search_cmd(cmd):
+    logger(cmd)
+
+    cdb = shutil.which(cmd)
+    if not cdb:
+        logger(res=True, resmsg="not found")
+        sys.exit()
+    else:
+        logger(res=True, resmsg=cdb)
+
+    return cdb
+
+def run_cmd(cmd):
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    out, err = p.communicate()
+    return out, err
+
+def checkenv(args):
+    env = {}
+
+    cmd = "dropdb"
+    env[cmd] = search_cmd(cmd)
+
+    cmd = "createdb"
+    env[cmd] = search_cmd(cmd)
+
+    cmd = "pdal"
+    env[cmd] = search_cmd(cmd)
+
+    return env
+
+def getfiles(args):
+    logger("Search input file(s)")
+
+    files = []
+    pattern = args.files
+    for filename in glob.glob(pattern):
+        files.append(os.path.abspath(filename))
+
+    if not files:
+        logger(res=True, valid=False)
+        print("No input files found.")
+        sys.exit()
+    else:
+        logger(res=True, valid=True)
+
+    return files
+
+def init_outdir(args):
+    logger("Initialize output directory")
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
+    logger(res=True, valid=True)
+
+def initdb(args, env):
+    logger("Create the database")
+    out, err = run_cmd([env['createdb'], args.pg_db])
+    if err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+    else:
+        logger(res=True, valid=True)
+
+    logger("Initialize connection with database")
+    app.config['PG_USER'] = args.pg_user
+    app.config['PG_HOST'] = args.pg_host
+    app.config['PG_TABLE'] = args.pg_table
+    app.config['PG_COLUMN'] = 'pa'
+    app.config['PG_PASSWORD'] = args.pg_pwd
+    app.config['PG_PORT'] = args.pg_port
+    app.config['PG_NAME'] = args.pg_db
+    app.config['LOGGER_NAME'] = 'scan'
+    Session.init_app(app)
+    logger(res=True, valid=True)
+
+    logger("Load postgis extension")
+    query = "create extension if not exists postgis;"
+    try:
+        Session.db.cursor().execute(query)
+        logger(res=True, valid=True)
+    except psycopg2.OperationalError as err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+
+    logger("Load pointcloud extension")
+    query = "create extension if not exists pointcloud;"
+    try:
+        Session.db.cursor().execute(query)
+        logger(res=True, valid=True)
+    except psycopg2.OperationalError as err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+
+    logger("Load pointcloud_postgis extension")
+    query = "create extension if not exists pointcloud_postgis;"
+    try:
+        Session.db.cursor().execute(query)
+        logger(res=True, valid=True)
+    except psycopg2.OperationalError as err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+
+    logger("Load morton extension")
+    query = "create extension if not exists morton;"
+    try:
+        Session.db.cursor().execute(query)
+        logger(res=True, valid=True)
+    except psycopg2.OperationalError as err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+
+    return Session.db.cursor()
+
+def pdal_pipeline(files, args, env):
+    logger("Build PDAL pipelines")
+    pipelines = []
+    for f in files:
+        basename = os.path.splitext(os.path.basename(f))[0]
+        json_path = os.path.join(args.outdir,
+                                 '{0}.pipeline'.format(basename))
+        fh = open(json_path, 'w')
+
+        json = ('{{\n'
+                '"pipeline":[\n'
+                '{{\n'
+                '"type":"readers.{0}",\n'
+                '"filename":"{1}",\n'
+                '"spatialreference":"EPSG:{2}"\n'
+                '}},\n'
+                '{{\n'
+                '"type":"filters.chipper",\n'
+                '"capacity":{3}\n'
+                '}},\n'
+                '{{\n'
+                '"type":"filters.midoc"\n'
+                '}},\n'
+                '{{\n'
+                '"type":"writers.pgpointcloud",\n'
+                '"connection":"dbname={4}",\n'
+                '"table":"{5}",\n'
+                '"compression":"laz",\n'
+                '"srid":"{2}",\n'
+                '"overwrite":"false"\n'
+                '}}\n'
+                ']\n'
+                '}}\n'.format(args.pdal_reader, f, args.epsg, args.pdal_patchsize,
+                            args.pg_db, args.pg_table))
+
+        fh.write(json)
+        fh.close()
+
+        pipelines.append(os.path.abspath(json_path))
+    logger(res=True, valid=True)
+
+    n = len(pipelines)
+    for i in range(0, n):
+        print("Run PDAL pipelines...: {0}/{1}".format(i, n), end='\r')
+        sys.stdout.flush()
+        pipe = pipelines[i]
+        out, err = run_cmd([env['pdal'], 'pipeline', '-i', '{0}'.format(pipe)])
+        if err:
+            logger("Run PDAL pipelines")
+            logger(res=True, valid=False)
+            print(err)
+            sys.exit()
+    print("                                                     ", end='\r')
+    logger("Run PDAL pipelines")
+    logger(res=True, valid=True)
+
+def getbbox():
+    print()
+    logger("Extract bounding box")
+    fullbbox = Session.boundingbox()
+    bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
+            fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
+    logger(res=True, valid=True)
+
+    return bbox
+
+def potreeschema(args, bbox, cursor):
+    print()
+
+    schema = ('<?xml version="1.0" encoding="UTF-8"?>'
+              '<pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+              '<pc:dimension>'
+              '<pc:position>1</pc:position>'
+              '<pc:size>4</pc:size>'
+              '<pc:description>X coordinate</pc:description>'
+              '<pc:name>X</pc:name>'
+              '<pc:interpretation>int32_t</pc:interpretation>'
+              '<pc:scale>{0}</pc:scale>'
+              '<pc:offset>{1}</pc:offset>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>2</pc:position>'
+              '<pc:size>4</pc:size>'
+              '<pc:description>Y coordinate</pc:description>'
+              '<pc:name>Y</pc:name>'
+              '<pc:interpretation>int32_t</pc:interpretation>'
+              '<pc:scale>{0}</pc:scale>'
+              '<pc:offset>{2}</pc:offset>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>3</pc:position>'
+              '<pc:size>4</pc:size>'
+              '<pc:description>Z coordinate</pc:description>'
+              '<pc:name>Z</pc:name>'
+              '<pc:interpretation>int32_t</pc:interpretation>'
+              '<pc:scale>{0}</pc:scale>'
+              '<pc:offset>{3}</pc:offset>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>4</pc:position>'
+              '<pc:size>2</pc:size>'
+              '<pc:description>Representation of the pulse return magnitude</pc:description>'
+              '<pc:name>Intensity</pc:name>'
+              '<pc:interpretation>uint16_t</pc:interpretation>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>5</pc:position>'
+              '<pc:size>1</pc:size>'
+              '<pc:description>ASPRS classification.  0 for no classification.</pc:description>'
+              '<pc:name>Classification</pc:name>'
+              '<pc:interpretation>uint8_t</pc:interpretation>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>6</pc:position>'
+              '<pc:size>2</pc:size>'
+              '<pc:description>Red image channel value</pc:description>'
+              '<pc:name>Red</pc:name>'
+              '<pc:interpretation>uint16_t</pc:interpretation>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>7</pc:position>'
+              '<pc:size>2</pc:size>'
+              '<pc:description>Green image channel value</pc:description>'
+              '<pc:name>Green</pc:name>'
+              '<pc:interpretation>uint16_t</pc:interpretation>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:dimension>'
+              '<pc:position>8</pc:position>'
+              '<pc:size>2</pc:size>'
+              '<pc:description>Blue image channel value</pc:description>'
+              '<pc:name>Blue</pc:name>'
+              '<pc:interpretation>uint16_t</pc:interpretation>'
+              '<pc:active>true</pc:active>'
+              '</pc:dimension>'
+              '<pc:metadata>'
+              '<Metadata name="compression" type="string"/>none</pc:metadata>'
+              '<pc:orientation>point</pc:orientation>'
+              '</pc:PointCloudSchema>')
+
+    xoffset = bbox[0] + (bbox[3]-bbox[0])/2
+    yoffset = bbox[1] + (bbox[4]-bbox[1])/2
+    zoffset = bbox[2] + (bbox[5]-bbox[2])/2
+
+    logger("Insert Potree schema for scale=0.1")
+    schema = schema.format(0.1, xoffset, yoffset, zoffset)
+    sql = ("INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (2, {0}, '{1}')"
+           .format(args.epsg, schema))
+    cursor.execute(sql)
+    logger(res=True, valid=True)
+
+    logger("Insert Potree schema for scale=0.01")
+    schema = schema.format(0.01, xoffset, yoffset, zoffset)
+    sql = ("INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (3, {0}, '{1}')"
+           .format(args.epsg, schema))
+    cursor.execute(sql)
+    logger(res=True, valid=True)
+
+def morton_code(args, cursor):
+    print()
+    logger("Compute Morton code")
+
+    sql = ("ALTER TABLE {0} add column morton bigint;".format(args.pg_table))
+    cursor.execute(sql)
+
+    sql = ("SELECT Morton_Update('{0}', 'pa::geometry', 'morton', {1}, TRUE)"
+           .format(args.pg_table, args.morton_size))
+    cursor.execute(sql)
+
+    sql = ("CREATE index ON {0}(morton)".format(args.pg_table))
+    cursor.execute(sql)
+
+    logger(res=True, valid=True)
+
+
+def hierarchy(app, args, bbox):
+    print()
+
+    logger("Generate a hierarchy file for Potree")
+
+    np = 8
+    pool = Pool(np)
+    query_con = ("postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:"
+                 "{PG_PORT}/{PG_NAME}"
+                 .format(**app.config))
+
+    cursors = []
+    for i in range(0, np):
+        db = psycopg2.connect(query_con, cursor_factory=NamedTupleCursor,)
+        cursors.append(db.cursor())
+
+    #h = greyhound.build_hierarchy_from_pg(args.lod_max, bbox, 0, cursors[0])
+    h = greyhound.build_hierarchy_from_pg(args.lod_max, bbox, 0)
+    path = os.path.join(args.outdir, 'potree.hcy')
+    f = open(path, 'w')
+    json.dump(h, f)
+    f.close()
+    logger(res=True, valid=True)
+
+    logger("Paste the Potree hierarchy in LOPoCS cache directory")
+    os.makedirs(args.lopocs_cachedir)
+    copyfile(path, os.path.join(args.lopocs_cachedir, 'potree.hcy'))
+    logger(res=True, valid=True)
+
+    # logger("Generate a hierarchy file for Cesium")
+    # h = threedtiles.build_hierarchy_from_pg(baseurl, lod_max, bbox, lod_min)
+    # logger(res=True, valid=True)
+
+def configfile(args, bbox):
+    print()
+
+    logger("Generate a configuration file for LOPoCS")
+    cfg = ("flask:\n"
+           "    DEBUG: True\n"
+           "    LOG_LEVEL: debug\n"
+           "    PG_HOST: {11}\n"
+           "    PG_USER: {12}\n"
+           "    PG_NAME: {0}\n"
+           "    PG_PORT: {1}\n"
+           "    PG_COLUMN: pa\n"
+           "    PG_TABLE: {2}\n"
+           "    PG_PASSWORD: {13}\n"
+           "    DEPTH: {3}\n"
+           "    BB: [{4}, {5}, {6}, {7}, {8}, {9}]\n"
+           "    USE_MORTON: True\n"
+           "    CACHE_DIR: {10}\n"
+           "    POTREE_SCH_PCID_SCALE_01: 2\n"
+           "    POTREE_SCH_PCID_SCALE_001: 3\n"
+           "    STATS: False\n"
+           .format(args.pg_db, args.pg_port, args.pg_table, args.lod_max+1, bbox[0],
+                   bbox[1], bbox[2], bbox[3], bbox[4], bbox[5], args.lopocs_cachedir,
+                   args.pg_host, args.pg_user, args.pg_pwd))
+    path = os.path.join(args.outdir, 'lopocs.yml')
+    f = open(path, 'w')
+    f.write(cfg)
+    f.close()
+    logger(res=True, valid=True)
+
+    logger("Generate a configuration file for UWSGI")
+    cfg =("uwsgi:\n"
+          "    virtualenv: {0}\n"
+          "    master: true\n"
+          "    socket: {1}:{2}\n"
+          "    protocol: http\n"
+          "    module: lopocs.wsgi:app\n"
+          "    processes: 4\n"
+          "    enable-threads: true\n"
+          "    lazy-apps: true\n"
+          "    need-app: true\n"
+          "    catch: exceptions=true\n"
+          "#    logto2: {4}\n"
+          "#    log-maxsize: 10000000\n"
+          "    env: LOPOCS_SETTINGS={3}/lopocs.yml\n"
+          .format(args.uwsgi_venv, args.uwsgi_host, args.uwsgi_port,
+                  os.path.abspath(args.outdir), args.uwsgi_log))
+    path = os.path.join(args.outdir, 'lopocs.uwsgi.yml')
+    f = open(path, 'w')
+    f.write(cfg)
+    f.close()
+    logger(res=True, valid=True)
+
+def potreeviewer(args):
+    logger("Clone Potree repository from LI3DS project")
+    dest = os.path.join(args.outdir, "potree")
+    repo = git.Repo.clone_from("https://github.com/LI3DS/potree", dest)
+    repo.git.checkout("li3ds")
+    logger(res=True, valid=True)
+
+    logger("Prepare Potree html file")
+    src = os.path.join(dest, "examples/greyhound_helens.html")
+    dst = os.path.abspath(os.path.join(dest, "examples/lopocs.html"))
+
+    replacements = {'192.168.1.12':args.uwsgi_host, '5000':str(args.uwsgi_port)}
+    with open(src) as infile, open(dst, 'w') as outfile:
+        for line in infile:
+            for src, target in replacements.items():
+                line = line.replace(src, target)
+            outfile.write(line)
+
+    os.symlink(dst, os.path.abspath(os.path.join(args.outdir, "lopocs.html")))
+
+    logger(res=True, valid=True)
+
+# -----------------------------------------------------------------------------
+# main
+# -----------------------------------------------------------------------------
+if __name__ == '__main__':
+    descr = 'Prepare database for LOPoCS'
+    parser = argparse.ArgumentParser(description=descr)
+
+    # general
+    files_help = "input files. A regex can be used: 'input/*.las'"
+    parser.add_argument('files', metavar='files', type=str, help=files_help)
+
+    outdir_help = "output directory"
+    parser.add_argument('outdir', metavar='outdir', type=str, help=outdir_help)
+
+    epsg_help = "EPSG code"
+    parser.add_argument('epsg', metavar='epsg', type=int, help=epsg_help)
+
+    # flags
+    conf_help = "print current configuration only"
+    parser.add_argument('--confonly', help=conf_help, action="store_true")
+
+    potreeviewer_help = "Download and configure Potree viewer"
+    parser.add_argument('--potreeviewer', help=potreeviewer_help, action="store_true")
+
+    # postgres parameters
+    pg_db_help = 'postgres database'
+    parser.add_argument('pg_db', metavar='pg_db', type=str, help=pg_db_help)
+
+    pg_user_help = 'postgres user (default: {})'.format(USER)
+    parser.add_argument('-pg_user', metavar='pg_user', type=str,
+                        help=pg_user_help, default=USER)
+
+    pg_table_default = 'patchs'
+    pg_table_help = 'postgres table (default: {})'.format(pg_table_default)
+    parser.add_argument('-pg_table', metavar='pg_table', type=str,
+                        help=pg_table_help, default=pg_table_default)
+
+    pg_host_help = 'postgres host (default: localhost)'
+    parser.add_argument('-pg_host', metavar='pg_host', type=str,
+                        help=pg_host_help, default='localhost')
+
+    pg_port_default = 5432
+    pg_host_help = 'postgres port (default: {})'.format(pg_port_default)
+    parser.add_argument('-pg_port', metavar='pg_port', type=str,
+                        help=pg_host_help, default=pg_port_default)
+
+    pg_pwd_help = 'postgres password (default: )'
+    parser.add_argument('-pg_pwd', metavar='pg_pwd', type=str,
+                        help=pg_pwd_help, default='')
+
+    # pdal pipeline
+    pdal_patchsize_help = "number of points per patch (default: 500)"
+    parser.add_argument('-pdal_patchsize', metavar='size', type=int,
+                        help=pdal_patchsize_help, default=500)
+
+    pdal_reader_help = "PDAL reader to use in the pipeline (default: las)"
+    parser.add_argument('-pdal_reader', metavar='reader', type=str,
+                        help=pdal_reader_help, default='las')
+
+    # morton
+    morton_grid_help = "Grid size to compute the Morton Code (default: 64)"
+    parser.add_argument('-morton_size', metavar='size', type=int,
+                        help=morton_grid_help, default=64)
+
+    # hierarchy
+    lod_max_help = "Maximum Level Of Detail (default: 6)"
+    parser.add_argument('-lod_max', metavar='lod_max', type=int,
+                        help=lod_max_help, default=6)
+
+    # lopocs
+    lp_cachedir_default = "'{}/.cache/lopocs/')".format(HOME)
+    lp_cachedir_help = ("LOPoCS cache directory (default: {})"
+                        .format(lp_cachedir_default))
+    parser.add_argument('-lopocs_cachedir', metavar='dir', type=str,
+                        help=lp_cachedir_help, default=lp_cachedir_default)
+
+    # uwsgi
+    uwsgi_host_help = ("UWSGI host through which LOPoCS will be available (default: 127.0.0.1)")
+    parser.add_argument('-uwsgi_host', metavar='uwsgi_host', type=str,
+                        help=uwsgi_host_help, default='127.0.0.1')
+
+    uwsgi_port_help = ("UWSGI port through which LOPoCS will be available (default: 5000)")
+    parser.add_argument('-uwsgi_port', metavar='uwsgi_port', type=int,
+                        help=uwsgi_port_help, default=5000)
+
+    uwsgi_log_help = ("UWSGI logfile (default: /tmp/lopocs.log)")
+    parser.add_argument('-uwsgi_log', metavar='uwsgi_log', type=str,
+                        help=uwsgi_log_help, default='/tmp/lopocs.log')
+
+    uwsgi_venv_default = os.path.join(SCRIPT_DIR, '../venv')
+    uwsgi_venv_help = ("UWSGI virtualenv (default: {0})".format(uwsgi_venv_default))
+    parser.add_argument('-uwsgi_venv', metavar='uwsgi_venv', type=str,
+                        help=uwsgi_venv_help, default=uwsgi_venv_default)
+
+    args = parser.parse_args()
+
+    # print configuration
+    config_summary(args)
+
+    if (not args.confonly):
+        header("LOPoCS check environment")
+        env = checkenv(args)
+
+        app = Flask(__name__)
+        with app.app_context():
+            header("LOPoCS prepare")
+            files = getfiles(args)
+            init_outdir(args)
+            header("LOPoCS initialize database")
+            dbcursor = initdb(args, env)
+            header("LOPoCS fill database")
+            pdal_pipeline(files, args, env)
+            header("LOPoCS preprocessing")
+            bbox = getbbox()
+            potreeschema(args, bbox, dbcursor)
+            morton_code(args, dbcursor)
+            hierarchy(app, args, bbox)
+            configfile(args, bbox)
+
+            if args.potreeviewer:
+                header("LOPoCS configure viewer(s)")
+                potreeviewer(args)

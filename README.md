@@ -38,7 +38,17 @@ performances.
 
 ## Install
 
-[FromSources](#fromsources)
+In order to have an efficient and a reactive streaming, we've made some
+development in PDAL, pgpointcloud and Potree.
+
+Some of these developments are not merged in upstream projects yet (but of
+course, it's the intention). So you have to use these forks to correctly configure the
+database for LOPoCS:
+- https://github.com/LI3DS/pointcloud
+- https://github.com/LI3DS/PDAL
+- https://github.com/LI3DS/potree
+
+
 ### From sources
 
 To use LOPoCS from sources:
@@ -62,14 +72,6 @@ If you want to run unit tests:
 ...
 ```
 
-In order to have an efficient and a reactive streaming, we've made some
-development in PDAL, pgpointcloud (such as the pc_range function) and Potree.
-Some of these developments are not merged in upstream projects yet (but of
-course, it's the intention). So you have to use these forks to correctly run lopocs:
-- https://github.com/LI3DS/pointcloud
-- https://github.com/LI3DS/PDAL
-- https://github.com/LI3DS/potree
-
 ## How to run
 
 LOPoCS has been tested with uWSGI and Nginx.
@@ -90,7 +92,7 @@ In case of the next error:
 (venv)$ uwsgi --yml conf/lopocs.uwsgi.yml
 ImportError: No module named site
 (venv)$ deactivate
-(venv)$ . venv/bin/activate
+$ . venv/bin/activate
 (venv)$ uwsgi --yml conf/lopocs.uwsgi.yml
 spawned uWSGI worker 1 (pid: 5984, cores: 1)
 
@@ -166,21 +168,69 @@ The **3dtiles** namespace provides 2 points of entry:
 - read.pnts: returns points in 3DTiles Point Cloud format
 
 
-## Full example
+## lopocs_builder tool
 
-The aim of this part is to provide a full example on how to fill the database
-and configure LOPoCS to stream point clouds.
+The aim of **lopocs_builder** is to prepare the database for LOPoCS in a single
+step.
 
 
-### Download a LAS file
-
-The first step is to download the LAS file that we are going to use
-*LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las*:
+### Usage
 
 ```
-$ cd example
-$ sh get_las.sh
-http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las
+(venv)$ ./tools/lopocs_builder --help
+usage: lopocs_builder [-h] [--confonly] [--potreeviewer] [-pg_user pg_user]
+                      [-pg_table pg_table] [-pg_host pg_host]
+                      [-pg_port pg_port] [-pg_pwd pg_pwd]
+                      [-pdal_patchsize size] [-pdal_reader reader]
+                      [-morton_size size] [-lod_max lod_max]
+                      [-lopocs_cachedir dir] [-uwsgi_host uwsgi_host]
+                      [-uwsgi_port uwsgi_port] [-uwsgi_log uwsgi_log]
+                      [-uwsgi_venv uwsgi_venv]
+                      files outdir epsg pg_db
+
+Prepare database for LOPoCS
+
+positional arguments:
+  files                 input files. A regex can be used: 'input/*.las'
+  outdir                output directory
+  epsg                  EPSG code
+  pg_db                 postgres database
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --confonly            print current configuration only
+  --potreeviewer        Download and configure Potree viewer
+  -pg_user pg_user      postgres user (default: USER)
+  -pg_table pg_table    postgres table (default: patchs)
+  -pg_host pg_host      postgres host (default: localhost)
+  -pg_port pg_port      postgres port (default: 5432)
+  -pg_pwd pg_pwd        postgres password (default: )
+  -pdal_patchsize size  number of points per patch (default: 500)
+  -pdal_reader reader   PDAL reader to use in the pipeline (default: las)
+  -morton_size size     Grid size to compute the Morton Code (default: 64)
+  -lod_max lod_max      Maximum Level Of Detail (default: 6)
+  -lopocs_cachedir dir  LOPoCS cache directory (default:
+                        '/home/USER/.cache/lopocs/'))
+  -uwsgi_host uwsgi_host
+                        UWSGI host through which LOPoCS will be available
+                        (default: 127.0.0.1)
+  -uwsgi_port uwsgi_port
+                        UWSGI port through which LOPoCS will be available
+                        (default: 5000)
+  -uwsgi_log uwsgi_log  UWSGI logfile (default: /tmp/lopocs.log)
+  -uwsgi_venv uwsgi_venv
+                        UWSGI virtualenv (default: lopocs/tools/../venv)
+```
+
+### Examples
+
+#### Airport
+
+Download the LAS file:
+
+```
+$ . venv/bin/activate
+(venv)$ wget www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las
 Resolving www.liblas.org (www.liblas.org)... 52.216.225.130
 Connecting to www.liblas.org (www.liblas.org)|52.216.225.130|:80... connected.
 HTTP request sent, awaiting response... 200 OK
@@ -188,86 +238,39 @@ Length: 99099473 (95M) [binary/octet-stream]
 Saving to: ‘LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las’
 ```
 
-### Create the database
-
-The second step is:
-- creating the *pc_sthelens * database
-- loading the necessary extensions like postgis or pointcloud
-- adding two schemas to send data towards Potree
-
-To do that, just run the next command:
+Run **lopocs_builder**:
 
 ```
-$ cd example
-$ sh initdb.sh
+(venv)$ rm -rf airport
+(venv)$ dropdb pc_airport
+(venv)$ ./tools/lopocs_builder \
+    LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las \
+    airport \
+    32616 \
+    pc_airport \
+    -lopocs_cachedir airport/cache \
+    --potreeviewer
+...
 ```
 
-
-### Fill the database with PDAL
-
-During this third step, we're going to build patchs of points and fill
-the database previsouly created thanks to a PDAL pipeline:
+Run LOPoCS with UWSGI:
 
 ```
-$ cd example
-$ pdal pipeline -i pipeline.json
+(venv)$ uwsgi -y outdir/lopocs.uwsgi.yml
 ```
 
-In this pipeline, we have:
-- a LAS reader
-- a chipper filter building patchs with 500 points each
-- a midoc filter ordering points by LOD within a patch
-- a pgpointcloud writer
-
-
-### Build a hierarchy file
-
-Potree needs a hierarchy to correctly allocate the memory. This hierarchy has
-to be generated and paste in the LOPoCS cache directory.
+Then you can test if LOPoCS is well running:
 
 ```
-$ cd example
-$ sh hierarchy.sh
-```
-
-The cache directory */tmp/lopocs* is created and the generated hierarchy file is
-paste in it.
-
-```
-$ ls /tmp/lopocs
-TODO
-```
-
-### Configure UWSGI and run LOPoCS
-
-If you have followed the [Installation from source section](#fromsources), you
-should have a virtualenv directory *lopocs/venv*. This directory has to be
-indicated within the uwsgi configuration file. The next command prepare this
-file according to your current environment:
-
-```
-$ cd example
-$ sh prepare.sh
-```
-
-And finally, you can run LOPoCS:
-
-```
-$ cd example
-$ uwsgi -y lopocs.uwsgi.yml &
-$ curl http://localhost:5000/infos/online
+(venv)$ curl http://localhost:5000/infos/online
 "Congratulation, LOPoCS is online!!!"
 ```
 
-#### Potree
+Finally, open Potree viewer with your favorite web browser:
 
-
-
-### Advanced usage
-
-
-### dbbuilder
-
+```
+(venv)$ chromium airport/lopocs.html
+```
 
 ## License
 

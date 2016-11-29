@@ -19,6 +19,7 @@ requirements = (
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
+    'gitpython'
 )
 
 dev_requirements = (
