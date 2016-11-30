@@ -7,7 +7,7 @@ import subprocess
 GDAL_VERSION = subprocess.check_output(['gdal-config', '--version']).strip().decode()
 GDAL_VERSION, GDAL_REVISION = GDAL_VERSION[:GDAL_VERSION.rfind('.')].split('.')
 GDAL_MIN = '{0}.{1}'.format(GDAL_VERSION, GDAL_REVISION)
-GDAL_MAX = '{0}.{1}'.format(GDAL_VERSION, int(GDAL_REVISION)+1)
+GDAL_MAX = '{0}.{1}'.format(GDAL_VERSION, int(GDAL_REVISION) + 1)
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -16,10 +16,14 @@ requirements = (
     'flask-restplus==0.9.2',
     'psycopg2==2.6.1',
     'pyyaml',
-    'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
+    # 'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
 )
+
+external_requirements = [
+    'git+https://github.com/hobu/laz-perf#egg=lazperf&subdirectory=python'
+]
 
 dev_requirements = (
     'pytest',
@@ -75,6 +79,7 @@ setup(
     packages=find_packages(),
     test_suite='tests',
     install_requires=requirements,
+    dependency_links=external_requirements,
     extras_require={
         'dev': dev_requirements,
         'prod': prod_requirements,
