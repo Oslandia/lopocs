@@ -496,7 +496,6 @@ def hierarchy(app, args, bbox):
 
 def configfile(args, bbox):
     print()
-    hcy = os.path.join(args.lopocs_cachedir, 'potree.hcy')
 
     logger("Generate a configuration file for LOPoCS")
     cfg = ("flask:\n"
@@ -521,7 +520,7 @@ def configfile(args, bbox):
                    bbox[1], bbox[2], bbox[3], bbox[4], bbox[5],
                    os.path.abspath(args.lopocs_cachedir),
                    args.pg_host, args.pg_user, args.pg_pwd,
-                   hcy))
+                   "potree.hcy"))
     path = os.path.join(args.outdir, 'lopocs.yml')
     f = open(path, 'w')
     f.write(cfg)

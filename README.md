@@ -230,10 +230,10 @@ The **3dtiles** namespace provides 2 points of entry:
 
 ## Full examples
 
-Some examples wth **las** and **e57** files are available in *examples*
+Some examples with **las** and **e57** files are available in *examples*
 directory.
 
-### Fill the database with **lopocs_builder**
+### Saint Sulpice
 
 An example with St Sulpice point cloud (e57 format) coming from [here](http://www.libe57.org/data.html):
 
@@ -470,7 +470,7 @@ $ pdal pipeline -i pipe.json
 ### Morton indexing
 
 Once you have patchs of points in database thanks to PDAL, you have to
-compute a Morton for each one of them:
+compute a Morton code for each one of them:
 
 ```
 $ psql pc_airport
@@ -535,7 +535,7 @@ $ uwsgi -y lopocs.uwsgi.yml
 
 ### [For Potree] Schemas in pgpointcloud
 
-Potree wait from the streaming server a specific point structure:
+Potree waits from the streaming server a specific point structure:
 
 ```
 X: int32 scaled and offsetted
@@ -585,7 +585,7 @@ OFFSET_Z = 292.6479649 + (327.0779649 - 292.6479649) / 2 = 309.8629649
 ```
 
 Then we have to build pointcloud schemas with these offsets and two different
-scales (0.1 and 0.001):
+scales (0.1 and 0.01):
 
 ```
 $ cp docs/potree_schema_scale_01.sql airport_schema_scale_01.sql
@@ -600,7 +600,7 @@ $ sed -i -e "s@!ZOFFSET!@309.8629649@g" airport_schema_scale_001.sql
 $ sed -i -e "s@!SRID!@32616@g" airport_schema_scale_001.sql
 ```
 
-And schemas has to be inserted in the database:
+These schemas have to be inserted in the database:
 
 ```
 $ psql pc_airport -f airport_schema_scale_01.sql
@@ -611,8 +611,8 @@ $ psql pc_airport -f airport_schema_scale_001.sql
 
 A hierarchy, described in Json, is necessary for the Potree loader.
 
-If you want a full description of what a hierarchy is, you can take a look
-[here](https://github.com/hobu/greyhound/blob/master/doc/clientDevelopment.rst).
+If you want a full description of what a Greyhound hierarchy is, you can take
+a look [here](https://github.com/hobu/greyhound/blob/master/doc/clientDevelopment.rst).
 
 A simple Python script is provided by LOPoCS to build a hierarchy from a
 pgpointcloud database:
