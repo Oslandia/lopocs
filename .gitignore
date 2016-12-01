@@ -4,6 +4,6 @@ venv/
 conf/lopocs.uwsgi.yml
 conf/lopocs.yml
 outdir
-airport
 *.las
 *.pyc
+*.e57

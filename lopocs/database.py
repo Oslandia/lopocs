@@ -17,6 +17,10 @@ class Session():
     db = None
 
     @classmethod
+    def forkme(cls):
+        cls.db = connect(cls.query_con)
+
+    @classmethod
     def approx_row_count(cls):
         if '.' in cls.table:
             schema, table = cls.table.split('.')
@@ -138,6 +142,7 @@ class Session():
         query_con = ("postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:"
                      "{PG_PORT}/{PG_NAME}"
                      .format(**app.config))
+        cls.query_con = query_con
         cls.db = connect(query_con, cursor_factory=NamedTupleCursor,)
 
         # autocommit mode for performance (we don't need transaction)

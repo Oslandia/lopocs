@@ -4,6 +4,7 @@ from flask import Response
 import numpy
 import time
 from lazperf import buildNumpyDescription, Decompressor
+from multiprocessing import Pool
 
 from .database import Session
 from . import utils
@@ -100,9 +101,12 @@ class GreyhoundHierarchy(object):
 
         bbox = utils.list_from_str(args['bounds'])
 
-        filename = ("{0}_{1}_{2}_{3}.hcy"
-                    .format(Session.dbname, lod_min, lod_max,
-                            '_'.join(str(e) for e in bbox)))
+        if lod_min == 0 and Config.ROOT_HCY:
+            filename = Config.ROOT_HCY
+        else:
+            filename = ("{0}_{1}_{2}_{3}.hcy"
+                        .format(Session.dbname, lod_min, lod_max,
+                                '_'.join(str(e) for e in bbox)))
         cached_hcy = utils.read_in_cache(filename)
 
         if Config.DEBUG:
@@ -260,6 +264,73 @@ def fake_hierarchy(begin, end, npatchs):
             p['sed'] = fake_hierarchy(begin, end, npatchs)
 
     return p
+
+
+def build_hierarchy_from_pg_mp_fork(code, lod_max, bbox, lod):
+    Session.forkme()
+    h = build_hierarchy_from_pg(lod_max, bbox, lod)
+    return [code, h]
+
+
+def build_hierarchy_from_pg_mp(lod_max, bbox, lod):
+
+    # init a pool of processes: one per leaf
+    pool = Pool()
+
+    # extract root level
+    lod = 0
+    sql = sql_query(bbox, Config.POTREE_SCH_PCID_SCALE_01, lod)
+    pcpatch_wkb = Session.query_aslist(sql)[0]
+
+    hierarchy = {}
+    if lod <= lod_max and pcpatch_wkb:
+        npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+        hierarchy['n'] = npoints
+
+    lod += 1
+
+    # run leaf in forked processes
+    if lod <= lod_max:
+        # width / length / height
+        width = bbox[3] - bbox[0]
+        length = bbox[4] - bbox[1]
+        height = bbox[5] - bbox[2]
+
+        up = bbox[5]
+        middle = up - height/2
+        down = bbox[2]
+
+        x = bbox[0]
+        y = bbox[1]
+
+        # build bboxes for leaf
+        bbox_nwd = [x, y+length/2, down, x+width/2, y+length, middle]
+        bbox_nwu = [x, y+length/2, middle, x+width/2, y+length, up]
+        bbox_ned = [x+width/2, y+length/2, down, x+width, y+length, middle]
+        bbox_neu = [x+width/2, y+length/2, middle, x+width, y+length, up]
+        bbox_swd = [x, y, down, x+width/2, y+length/2, middle]
+        bbox_swu = [x, y, middle, x+width/2, y+length/2, up]
+        bbox_sed = [x+width/2, y, down, x+width, y+length/2, middle]
+        bbox_seu = [x+width/2, y, middle, x+width, y+length/2, up]
+
+        # run leaf in processes
+        params = [["nwd", lod_max, bbox_nwd, lod],
+                  ["nwu", lod_max, bbox_nwu, lod],
+                  ["ned", lod_max, bbox_ned, lod],
+                  ["neu", lod_max, bbox_neu, lod],
+                  ["swd", lod_max, bbox_swd, lod],
+                  ["swu", lod_max, bbox_swu, lod],
+                  ["sed", lod_max, bbox_sed, lod],
+                  ["seu", lod_max, bbox_seu, lod]]
+        res = pool.starmap(build_hierarchy_from_pg_mp_fork, params)
+        pool.close()
+        pool.join()
+
+        for i in range(0, len(res)):
+            r = res[i]
+            hierarchy[r[0]] = r[1]
+
+    return hierarchy
 
 
 def build_hierarchy_from_pg(lod_max, bbox, lod):

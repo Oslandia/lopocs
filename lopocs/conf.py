@@ -8,6 +8,7 @@ class Config(object):
     BB = None
     DEPTH = 6
     CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache/lopocs")
+    ROOT_HCY = None
     MAX_PATCHS_PER_QUERY = None
     MAX_POINTS_PER_PATCH = None
     POTREE_SCH_PCID_SCALE_01 = 2  # scale 0.1
@@ -39,6 +40,9 @@ class Config(object):
             cls.CACHE_DIR = config['CACHE_DIR']
             if not os.path.isdir(cls.CACHE_DIR):
                 os.makedirs(cls.CACHE_DIR)
+
+        if 'ROOT_HCY' in config:
+            cls.ROOT_HCY = config['ROOT_HCY']
 
         if 'MAX_PATCHS_PER_QUERY' in config:
             cls.MAX_PATCHS_PER_QUERY = config['MAX_PATCHS_PER_QUERY']
