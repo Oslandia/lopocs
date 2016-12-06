@@ -323,7 +323,7 @@ def pdal_pipeline(files, args, env):
                 '"type":"writers.pgpointcloud",\n'
                 '"connection":"dbname={2} port={5} user={6} password={7}",\n'
                 '"table":"{3}",\n'
-                '"compression":"laz",\n'
+                '"compression":"lazperf",\n'
                 '"srid":"{4}",\n'
                 '"overwrite":"false"\n'
                 '}}\n'
