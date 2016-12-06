@@ -4,24 +4,21 @@
 # -----------------------------------------------------------------------------
 # imports
 # -----------------------------------------------------------------------------
-from shutil import copyfile
+import shlex
 import argparse
 from flask import Flask
 import shutil
 import subprocess
 import time
 import json
-import git
-import getpass
 import psycopg2
-from psycopg2.extras import NamedTupleCursor
 import os
+import getpass
 import glob
 import sys
-from multiprocessing import Pool
 
-SCRIPT_DIR=os.path.dirname(os.path.realpath(__file__))
-LOPOCS_MODULE_DIR=os.path.join(SCRIPT_DIR, "..")
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+LOPOCS_MODULE_DIR = os.path.join(SCRIPT_DIR, "..")
 sys.path.append(LOPOCS_MODULE_DIR)
 
 from lopocs.database import Session
@@ -72,6 +69,7 @@ def logger(msg='', res=False, valid=True, resmsg=''):
             print(bcolors.FAIL + "FAIL" + bcolors.ENDC)
 
     sys.stdout.flush()
+
 
 def config_summary(args):
 
@@ -124,6 +122,7 @@ def search_cmd(cmd):
 
     return cdb
 
+
 def search_lib(libpath, libname):
     logger(libname)
 
@@ -133,11 +132,13 @@ def search_lib(libpath, libname):
         logger(res=True, resmsg="not found")
         sys.exit()
 
+
 def run_cmd(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
     out, err = p.communicate()
     return out, err
+
 
 def checkenv(args):
     env = {}
@@ -210,7 +211,13 @@ def init_outdir(args):
 
 def initdb(args, env):
     logger("Create the database")
-    out, err = run_cmd([env['createdb'], args.pg_db])
+    out, err = run_cmd(shlex.split('{} {} {} {} {}'.format(
+      env['createdb'],
+      '-p {}'.format(args.pg_port) if args.pg_port else '',
+      '-U {}'.format(args.pg_user) if args.pg_user else '',
+      '-h {}'.format(args.pg_host) if args.pg_host else '',
+      args.pg_db
+    )))
     if err:
         logger(res=True, valid=False)
         print(err)
@@ -314,15 +321,17 @@ def pdal_pipeline(files, args, env):
                 '}},\n'
                 '{{\n'
                 '"type":"writers.pgpointcloud",\n'
-                '"connection":"dbname={2}",\n'
+                '"connection":"dbname={2} port={5} user={6} password={7}",\n'
                 '"table":"{3}",\n'
                 '"compression":"laz",\n'
                 '"srid":"{4}",\n'
                 '"overwrite":"false"\n'
                 '}}\n'
                 ']\n'
-                '}}\n'.format(reader_pipe, args.pdal_patchsize,
-                            args.pg_db, args.pg_table, args.epsg))
+                '}}\n'.format(
+                  reader_pipe, args.pdal_patchsize,
+                  args.pg_db, args.pg_table, args.epsg,
+                  args.pg_port, args.pg_user, args.pg_pwd))
 
         fh.write(json)
         fh.close()
