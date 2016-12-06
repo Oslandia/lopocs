@@ -101,6 +101,7 @@ development in PDAL and pgpointcloud.
 Some of these developments are not merged in upstream projects yet (but of
 course, it's the intention). So you have to use some forks from the LI3DS
 project to be able to use **lopocs_builder**:
+
 - [LI3DS/pgpointcloud width dev branch](https://github.com/LI3DS/pointcloud/tree/dev)
 - [LI3DS/PDAL with e57reader branch](https://github.com/LI3DS/PDAL/tree/e57reader)
 

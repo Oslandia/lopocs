@@ -474,7 +474,7 @@ def morton_code(args, cursor):
     sql = ("ALTER TABLE {0} add column morton bigint;".format(args.pg_table))
     cursor.execute(sql)
 
-    sql = ("SELECT Morton_Update('{0}', 'pa::geometry', 'morton', {1}, TRUE)"
+    sql = ("SELECT Morton_Update('{0}', 'pa', 'morton', {1}, TRUE)"
            .format(args.pg_table, args.morton_size))
     cursor.execute(sql)
 
