@@ -16,6 +16,7 @@ import os
 import getpass
 import glob
 import sys
+from distutils.dir_util import copy_tree
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LOPOCS_MODULE_DIR = os.path.join(SCRIPT_DIR, "..")
@@ -574,7 +575,7 @@ def potreeviewer(args):
     potree_dir = os.path.join(LOPOCS_MODULE_DIR, "vendor/potree")
 
     logger("Copy Potree project")
-    shutil.copytree(potree_dir, os.path.join(args.outdir, "potree"))
+    copy_tree(potree_dir, os.path.join(args.outdir, "potree"))
     logger(res=True, valid=True)
 
     logger("Prepare Potree html file")
