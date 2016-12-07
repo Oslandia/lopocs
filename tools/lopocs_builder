@@ -483,6 +483,17 @@ def morton_code(args, cursor):
 
     logger(res=True, valid=True)
 
+def create_patch_index(args, cursor):
+    logger("Create geo index on patch")
+
+    sql = (
+      "create index if not exists {0}_pa_idx on {0} using gist(geometry(pa))"
+      .format(args.pg_table)
+    )
+    cursor.execute(sql)
+
+    logger(res=True, valid=True)
+
 def hierarchy(app, args, bbox):
     print()
 
@@ -702,6 +713,7 @@ if __name__ == '__main__':
             dbcursor = initdb(args, env)
             header("LOPoCS fill database")
             pdal_pipeline(files, args, env)
+            create_patch_index(args, dbcursor)
             header("LOPoCS preprocessing")
             bbox = getbbox()
             potreeschema(args, bbox, dbcursor)
