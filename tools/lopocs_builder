@@ -655,7 +655,7 @@ if __name__ == '__main__':
                         help=lod_max_help, default=6)
 
     # lopocs
-    lp_cachedir_default = "'{}/.cache/lopocs/'".format(HOME)
+    lp_cachedir_default = os.path.join(HOME, '.cache', 'lopocs')
     lp_cachedir_help = ("LOPoCS cache directory (default: {})"
                         .format(lp_cachedir_default))
     parser.add_argument('-lopocs_cachedir', metavar='dir', type=str,
