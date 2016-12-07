@@ -574,7 +574,6 @@ def potreeviewer(args):
     potree_dir = os.path.join(LOPOCS_MODULE_DIR, "vendor/potree")
 
     logger("Copy Potree project")
-    shutil.rmtree(potree_dir, os.path.join(args.outdir, "potree"))
     shutil.copytree(potree_dir, os.path.join(args.outdir, "potree"))
     logger(res=True, valid=True)
 
