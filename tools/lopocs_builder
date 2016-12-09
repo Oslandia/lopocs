@@ -23,10 +23,7 @@ LOPOCS_MODULE_DIR = os.path.join(SCRIPT_DIR, "..")
 sys.path.append(LOPOCS_MODULE_DIR)
 
 from lopocs.database import Session
-from lopocs.conf import Config
 from lopocs import greyhound
-from lopocs import threedtiles
-from lopocs import utils
 
 # -----------------------------------------------------------------------------
 # const
