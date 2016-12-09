@@ -189,7 +189,14 @@ def clean(args):
     logger(res=True, valid=True)
 
     logger("Drop database")
-    out, err = run_cmd([env['dropdb'], '--if-exists', args.pg_db])
+    out, err = run_cmd(shlex.split('{} {} {} {} {} {}'.format(
+      env['dropdb'],
+      '--if-exists',
+      '-p {}'.format(args.pg_port) if args.pg_port else '',
+      '-U {}'.format(args.pg_user) if args.pg_user else '',
+      '-h {}'.format(args.pg_host) if args.pg_host else '',
+      args.pg_db
+    )))
     if err:
         logger(res=True, valid=False)
         print(err)
