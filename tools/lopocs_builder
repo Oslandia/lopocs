@@ -132,11 +132,10 @@ def search_lib(libpath, libname):
 
 
 def run_cmd(cmd):
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
-    out, err = p.communicate()
-    return out, err
-
+    out = subprocess.check_output(cmd)
+    if args.verbose:
+        print(out)
+    return out
 
 def checkenv(args):
     env = {}
@@ -155,7 +154,7 @@ def checkenv(args):
     cmd = "pdal-config"
     env[cmd] = search_cmd(cmd)
 
-    out, err = run_cmd([env["pdal-config"], "--plugin-dir"])
+    out = run_cmd([env["pdal-config"], "--plugin-dir"])
     pdal_plugindir = str(out, 'utf-8').replace('\n', '')
     midoc = os.path.join(pdal_plugindir, "libpdal_plugin_filter_midoc.so")
     search_lib(midoc, "pdal plugin midoc filter")
@@ -189,7 +188,7 @@ def clean(args):
     logger(res=True, valid=True)
 
     logger("Drop database")
-    out, err = run_cmd(shlex.split('{} {} {} {} {} {}'.format(
+    run_cmd(shlex.split('{} {} {} {} {} {}'.format(
       env['dropdb'],
       '--if-exists',
       '-p {}'.format(args.pg_port) if args.pg_port else '',
@@ -197,12 +196,6 @@ def clean(args):
       '-h {}'.format(args.pg_host) if args.pg_host else '',
       args.pg_db
     )))
-    if err:
-        logger(res=True, valid=False)
-        print(err)
-        sys.exit()
-    else:
-        logger(res=True, valid=True)
 
 def init_outdir(args):
     logger("Initialize output directory")
@@ -221,19 +214,14 @@ def init_outdir(args):
 
 def initdb(args, env):
     logger("Create the database")
-    out, err = run_cmd(shlex.split('{} {} {} {} {}'.format(
+    print(args.pg_port, args.pg_user, args.pg_host)
+    run_cmd(shlex.split('{} {} {} {} {}'.format(
       env['createdb'],
       '-p {}'.format(args.pg_port) if args.pg_port else '',
       '-U {}'.format(args.pg_user) if args.pg_user else '',
       '-h {}'.format(args.pg_host) if args.pg_host else '',
       args.pg_db
     )))
-    if err:
-        logger(res=True, valid=False)
-        print(err)
-        sys.exit()
-    else:
-        logger(res=True, valid=True)
 
     logger("Initialize connection with database")
     app.config['PG_USER'] = args.pg_user
@@ -354,12 +342,7 @@ def pdal_pipeline(files, args, env):
         print("Run PDAL pipelines...: {0}/{1}".format(i, n), end='\r')
         sys.stdout.flush()
         pipe = pipelines[i]
-        out, err = run_cmd([env['pdal'], 'pipeline', '-i', '{0}'.format(pipe)])
-        if err:
-            logger("Run PDAL pipelines")
-            logger(res=True, valid=False)
-            print(str(err, 'utf-8'))
-            sys.exit()
+        run_cmd([env['pdal'], 'pipeline', '-i', '{0}'.format(pipe)])
     print("                                                     ", end='\r')
     logger("Run PDAL pipelines")
     logger(res=True, valid=True)
@@ -699,6 +682,8 @@ if __name__ == '__main__':
     uwsgi_venv_help = ("UWSGI virtualenv (default: {0})".format(uwsgi_venv_default))
     parser.add_argument('-uwsgi_venv', metavar='uwsgi_venv', type=str,
                         help=uwsgi_venv_help, default=uwsgi_venv_default)
+
+    parser.add_argument('--verbose', action="store_true", help='Be more verbose')
 
     args = parser.parse_args()
 
