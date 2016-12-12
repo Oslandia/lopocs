@@ -1,3 +1,4 @@
+node_modules/
 lopocs.egg-info/
 dist/
 venv/
