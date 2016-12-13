@@ -193,7 +193,12 @@ def clean(args):
 
     logger("Drop database")
     out, err = run_cmd([env['dropdb'], '--if-exists', args.pg_db])
-    logger(res=True, valid=True)
+    if err:
+        logger(res=True, valid=False)
+        print(err)
+        sys.exit()
+    else:
+        logger(res=True, valid=True)
 
 def init_outdir(args):
     logger("Initialize output directory")
