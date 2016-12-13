@@ -18,22 +18,21 @@ import glob
 import sys
 from distutils.dir_util import copy_tree
 
+from lopocs.database import Session
+from lopocs import greyhound
+
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 LOPOCS_MODULE_DIR = os.path.join(SCRIPT_DIR, "..")
 sys.path.append(LOPOCS_MODULE_DIR)
 
-from lopocs.database import Session
-from lopocs import greyhound
-
 # -----------------------------------------------------------------------------
 # const
 # -----------------------------------------------------------------------------
-USER=getpass.getuser()
-HOME=os.path.expanduser("~")
+USER = getpass.getuser()
+HOME = os.path.expanduser("~")
 
-# -----------------------------------------------------------------------------
-# classes
-# -----------------------------------------------------------------------------
+
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -44,15 +43,14 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-# -----------------------------------------------------------------------------
-# functions
-# -----------------------------------------------------------------------------
+
 def header(msg):
     print()
     print("============================================================")
     print(msg)
     print("============================================================")
     print()
+
 
 def logger(msg='', res=False, valid=True, resmsg=''):
     if not res:
@@ -83,8 +81,10 @@ def config_summary(args):
     print(" - database: {}".format(args.pg_db))
     print(" - port: {}".format(args.pg_port))
     print(" - table: {}".format(args.pg_table))
+    print(" - column: {}".format(args.pg_column))
     print(" - user: {}".format(args.pg_user))
     print(" - password: {}".format(args.pg_pwd))
+    print(" - patch_compression: {}".format(args.pg_patchcompression))
     print()
     print("PDAL")
     print(" - reader: {}".format(args.pdal_reader))
@@ -107,6 +107,7 @@ def config_summary(args):
     print()
     print("Viewer(s)")
     print(" - PotreeViewer: {}".format(args.potreeviewer))
+
 
 def search_cmd(cmd):
     logger(cmd)
@@ -137,6 +138,7 @@ def run_cmd(cmd):
         print(out)
     return out
 
+
 def checkenv(args):
     env = {}
 
@@ -164,6 +166,7 @@ def checkenv(args):
 
     return env
 
+
 def getfiles(args):
     logger("Search input file(s)")
 
@@ -181,6 +184,7 @@ def getfiles(args):
 
     return files
 
+
 def clean(args):
     logger("Remove output directory")
     if os.path.exists(args.outdir):
@@ -189,13 +193,14 @@ def clean(args):
 
     logger("Drop database")
     run_cmd(shlex.split('{} {} {} {} {} {}'.format(
-      env['dropdb'],
-      '--if-exists',
-      '-p {}'.format(args.pg_port) if args.pg_port else '',
-      '-U {}'.format(args.pg_user) if args.pg_user else '',
-      '-h {}'.format(args.pg_host) if args.pg_host else '',
-      args.pg_db
+        env['dropdb'],
+        '--if-exists',
+        '-p {}'.format(args.pg_port) if args.pg_port else '',
+        '-U {}'.format(args.pg_user) if args.pg_user else '',
+        '-h {}'.format(args.pg_host) if args.pg_host else '',
+        args.pg_db
     )))
+
 
 def init_outdir(args):
     logger("Initialize output directory")
@@ -212,22 +217,23 @@ def init_outdir(args):
         os.makedirs(args.lopocs_cachedir)
     logger(res=True, valid=True)
 
+
 def initdb(args, env):
     logger("Create the database")
-    print(args.pg_port, args.pg_user, args.pg_host)
+    print(args.pg_port, args.pg_user, args.pg_host, args.pg_db)
     run_cmd(shlex.split('{} {} {} {} {}'.format(
-      env['createdb'],
-      '-p {}'.format(args.pg_port) if args.pg_port else '',
-      '-U {}'.format(args.pg_user) if args.pg_user else '',
-      '-h {}'.format(args.pg_host) if args.pg_host else '',
-      args.pg_db
+        env['createdb'],
+        '-p {}'.format(args.pg_port) if args.pg_port else '',
+        '-U {}'.format(args.pg_user) if args.pg_user else '',
+        '-h {}'.format(args.pg_host) if args.pg_host else '',
+        args.pg_db
     )))
 
     logger("Initialize connection with database")
     app.config['PG_USER'] = args.pg_user
     app.config['PG_HOST'] = args.pg_host
     app.config['PG_TABLE'] = args.pg_table
-    app.config['PG_COLUMN'] = 'pa'
+    app.config['PG_COLUMN'] = args.pg_column
     app.config['PG_PASSWORD'] = args.pg_pwd
     app.config['PG_PORT'] = args.pg_port
     app.config['PG_NAME'] = args.pg_db
@@ -236,9 +242,9 @@ def initdb(args, env):
     logger(res=True, valid=True)
 
     logger("Load postgis extension")
-    query = "create extension if not exists postgis;"
+    query = "create extension if not exists postgis"
     try:
-        Session.db.cursor().execute(query)
+        Session.execute(query)
         logger(res=True, valid=True)
     except psycopg2.OperationalError as err:
         logger(res=True, valid=False)
@@ -246,9 +252,9 @@ def initdb(args, env):
         sys.exit()
 
     logger("Load pointcloud extension")
-    query = "create extension if not exists pointcloud;"
+    query = "create extension if not exists pointcloud"
     try:
-        Session.db.cursor().execute(query)
+        Session.execute(query)
         logger(res=True, valid=True)
     except psycopg2.OperationalError as err:
         logger(res=True, valid=False)
@@ -256,26 +262,27 @@ def initdb(args, env):
         sys.exit()
 
     logger("Load pointcloud_postgis extension")
-    query = "create extension if not exists pointcloud_postgis;"
+    query = "create extension if not exists pointcloud_postgis"
     try:
-        Session.db.cursor().execute(query)
+        Session.execute(query)
         logger(res=True, valid=True)
     except psycopg2.OperationalError as err:
         logger(res=True, valid=False)
         print(err)
         sys.exit()
+
+    Session.create_pointcloud_streaming_table()
 
     logger("Load morton extension")
-    query = "create extension if not exists morton;"
+    query = "create extension if not exists morton"
     try:
-        Session.db.cursor().execute(query)
+        Session.execute(query)
         logger(res=True, valid=True)
     except psycopg2.OperationalError as err:
         logger(res=True, valid=False)
         print(err)
         sys.exit()
 
-    return Session.db.cursor()
 
 def pdal_reader_las(epsg, filename):
     json = ('{{\n'
@@ -285,12 +292,14 @@ def pdal_reader_las(epsg, filename):
             '}}\n').format(filename, epsg)
     return json
 
+
 def pdal_reader_e57(filename):
     json = ('{{\n'
             '"type":"readers.e57",\n'
             '"filename":"{0}"\n'
             '}}\n').format(filename)
     return json
+
 
 def pdal_pipeline(files, args, env):
     logger("Build PDAL pipelines")
@@ -321,15 +330,16 @@ def pdal_pipeline(files, args, env):
                 '"type":"writers.pgpointcloud",\n'
                 '"connection":"dbname={2} port={5} user={6} password={7}",\n'
                 '"table":"{3}",\n'
-                '"compression":"lazperf",\n'
+                '"compression":"{8}",\n'
                 '"srid":"{4}",\n'
-                '"overwrite":"false"\n'
+                '"overwrite":"true"\n'
                 '}}\n'
                 ']\n'
                 '}}\n'.format(
                   reader_pipe, args.pdal_patchsize,
                   args.pg_db, args.pg_table, args.epsg,
-                  args.pg_port, args.pg_user, args.pg_pwd))
+                  args.pg_port, args.pg_user, args.pg_pwd,
+                  args.pg_patchcompression))
 
         fh.write(json)
         fh.close()
@@ -347,153 +357,47 @@ def pdal_pipeline(files, args, env):
     logger("Run PDAL pipelines")
     logger(res=True, valid=True)
 
-def getbbox():
+
+def getbbox(session):
     logger("Extract bounding box")
-    fullbbox = Session.boundingbox()
+    fullbbox = session.boundingbox()
     bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
             fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
     logger(res=True, valid=True)
 
     return bbox
 
-def emptyschema():
-    schema = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-              '<pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n'
-              '<pc:dimension>\n'
-              '<pc:position>1</pc:position>\n'
-              '<pc:size>4</pc:size>\n'
-              '<pc:description>X coordinate</pc:description>\n'
-              '<pc:name>X</pc:name>\n'
-              '<pc:interpretation>int32_t</pc:interpretation>\n'
-              '<pc:scale>{0}</pc:scale>\n'
-              '<pc:offset>{1}</pc:offset>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>2</pc:position>\n'
-              '<pc:size>4</pc:size>\n'
-              '<pc:description>Y coordinate</pc:description>\n'
-              '<pc:name>Y</pc:name>\n'
-              '<pc:interpretation>int32_t</pc:interpretation>\n'
-              '<pc:scale>{0}</pc:scale>\n'
-              '<pc:offset>{2}</pc:offset>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>3</pc:position>\n'
-              '<pc:size>4</pc:size>\n'
-              '<pc:description>Z coordinate</pc:description>\n'
-              '<pc:name>Z</pc:name>\n'
-              '<pc:interpretation>int32_t</pc:interpretation>\n'
-              '<pc:scale>{0}</pc:scale>\n'
-              '<pc:offset>{3}</pc:offset>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>4</pc:position>\n'
-              '<pc:size>2</pc:size>\n'
-              '<pc:description>Representation of the pulse return magnitude</pc:description>\n'
-              '<pc:name>Intensity</pc:name>\n'
-              '<pc:interpretation>uint16_t</pc:interpretation>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>5</pc:position>\n'
-              '<pc:size>1</pc:size>\n'
-              '<pc:description>ASPRS classification.  0 for no classification.</pc:description>\n'
-              '<pc:name>Classification</pc:name>\n'
-              '<pc:interpretation>uint8_t</pc:interpretation>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>6</pc:position>\n'
-              '<pc:size>2</pc:size>\n'
-              '<pc:description>Red image channel value</pc:description>\n'
-              '<pc:name>Red</pc:name>\n'
-              '<pc:interpretation>uint16_t</pc:interpretation>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>7</pc:position>\n'
-              '<pc:size>2</pc:size>\n'
-              '<pc:description>Green image channel value</pc:description>\n'
-              '<pc:name>Green</pc:name>\n'
-              '<pc:interpretation>uint16_t</pc:interpretation>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:dimension>\n'
-              '<pc:position>8</pc:position>\n'
-              '<pc:size>2</pc:size>\n'
-              '<pc:description>Blue image channel value</pc:description>\n'
-              '<pc:name>Blue</pc:name>\n'
-              '<pc:interpretation>uint16_t</pc:interpretation>\n'
-              '<pc:active>true</pc:active>\n'
-              '</pc:dimension>\n'
-              '<pc:metadata>\n'
-              '<Metadata name="compression" type="string"/>none</pc:metadata>\n'
-              '<pc:orientation>point</pc:orientation>\n'
-              '</pc:PointCloudSchema>\n')
-    return schema
 
-def potreeschema(args, bbox, cursor):
-    print()
-
-    xoffset = bbox[0] + (bbox[3]-bbox[0])/2
-    yoffset = bbox[1] + (bbox[4]-bbox[1])/2
-    zoffset = bbox[2] + (bbox[5]-bbox[2])/2
-
-    xoffset = float("{0:.3f}".format(xoffset))
-    yoffset = float("{0:.3f}".format(yoffset))
-    zoffset = float("{0:.3f}".format(zoffset))
-
-    logger("Insert Potree schema for scale=0.1")
-    schema = emptyschema().format(0.1, xoffset, yoffset, zoffset)
-    sql = ("INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (2, {0}, '{1}')"
-           .format(args.epsg, schema))
-    cursor.execute(sql)
-    logger(res=True, valid=True)
-
-    logger("Insert Potree schema for scale=0.01")
-    schema = emptyschema().format(0.01, xoffset, yoffset, zoffset)
-    sql = ("INSERT INTO pointcloud_formats (pcid, srid, schema) VALUES (3, {0}, '{1}')"
-           .format(args.epsg, schema))
-    cursor.execute(sql)
-    logger(res=True, valid=True)
-
-def morton_code(args, cursor):
-    print()
+def morton_code(args, session):
     logger("Compute Morton code")
 
-    sql = ("ALTER TABLE {0} add column morton bigint;".format(args.pg_table))
-    cursor.execute(sql)
+    sql = ("ALTER TABLE {0} add column morton bigint".format(args.pg_table))
+    session.execute(sql)
 
-    sql = ("SELECT Morton_Update('{0}', 'pa', 'morton', {1}, TRUE)"
-           .format(args.pg_table, args.morton_size))
-    cursor.execute(sql)
+    sql = ("SELECT Morton_Update('{0}', '{2}', 'morton', {1}, TRUE)"
+           .format(args.pg_table, args.morton_size, args.pg_column))
+    session.execute(sql)
 
     sql = ("CREATE index ON {0}(morton)".format(args.pg_table))
-    cursor.execute(sql)
+    session.execute(sql)
 
     logger(res=True, valid=True)
 
-def create_patch_index(args, cursor):
+
+def create_patch_index(args, session):
     logger("Create geo index on patch")
-
-    sql = (
-      "create index if not exists {0}_pa_idx on {0} using gist(geometry(pa))"
-      .format(args.pg_table)
+    session.execute(
+        "create index if not exists {0}_{1}_idx on {0} using gist(geometry({1}))"
+        .format(args.pg_table, args.pg_column)
     )
-    cursor.execute(sql)
-
     logger(res=True, valid=True)
 
-def hierarchy(app, args, bbox):
-    print()
 
+def hierarchy(app, args, bbox, session, pcid):
     logger("Generate a hierarchy file for Potree")
 
     # save hierarchy in file
-    hierarchy = greyhound.build_hierarchy_from_pg_mp(args.lod_max, bbox, 0)
+    hierarchy = greyhound.build_hierarchy_from_pg_mp(session, args.lod_max, bbox, 0, pcid)
     path = os.path.join(args.lopocs_cachedir, 'potree.hcy')
     f = open(path, 'w')
     json.dump(hierarchy, f)
@@ -506,6 +410,7 @@ def hierarchy(app, args, bbox):
     # logger("Generate a hierarchy file for Cesium")
     # h = threedtiles.build_hierarchy_from_pg(baseurl, lod_max, bbox, lod_min)
     # logger(res=True, valid=True)
+
 
 def configfile(args, bbox):
     print()
@@ -529,7 +434,7 @@ def configfile(args, bbox):
            "    POTREE_SCH_PCID_SCALE_01: 2\n"
            "    POTREE_SCH_PCID_SCALE_001: 3\n"
            "    STATS: False\n"
-           .format(args.pg_db, args.pg_port, args.pg_table, args.lod_max+1, bbox[0],
+           .format(args.pg_db, args.pg_port, args.pg_table, args.lod_max + 1, bbox[0],
                    bbox[1], bbox[2], bbox[3], bbox[4], bbox[5],
                    os.path.abspath(args.lopocs_cachedir),
                    args.pg_host, args.pg_user, args.pg_pwd,
@@ -541,27 +446,30 @@ def configfile(args, bbox):
     logger(res=True, valid=True)
 
     logger("Generate a configuration file for UWSGI")
-    cfg =("uwsgi:\n"
-          "    virtualenv: {0}\n"
-          "    master: true\n"
-          "    socket: {1}:{2}\n"
-          "    protocol: http\n"
-          "    module: lopocs.wsgi:app\n"
-          "    processes: 4\n"
-          "    enable-threads: true\n"
-          "    lazy-apps: true\n"
-          "    need-app: true\n"
-          "    catch: exceptions=true\n"
-          "#    logto2: {4}\n"
-          "#    log-maxsize: 10000000\n"
-          "    env: LOPOCS_SETTINGS={3}/lopocs.yml\n"
-          .format(args.uwsgi_venv, args.uwsgi_host, args.uwsgi_port,
-                  os.path.abspath(args.outdir), args.uwsgi_log))
+    cfg = """
+uwsgi:
+    virtualenv: {0}
+    master: true
+    socket: {1}:{2}
+    protocol: http
+    module: lopocs.wsgi:app
+    processes: 4
+    enable-threads: true
+    lazy-apps: true
+    need-app: true
+    catch: exceptions=true
+    #    logto2: {4}
+    #    log-maxsize: 10000000
+    env: LOPOCS_SETTINGS={3}/lopocs.yml
+""".format(args.uwsgi_venv, args.uwsgi_host, args.uwsgi_port,
+           os.path.abspath(args.outdir), args.uwsgi_log)
+
     path = os.path.join(args.outdir, 'lopocs.uwsgi.yml')
     f = open(path, 'w')
     f.write(cfg)
     f.close()
     logger(res=True, valid=True)
+
 
 def potreeviewer(args):
     potree_dir = os.path.join(LOPOCS_MODULE_DIR, "vendor/potree")
@@ -574,7 +482,7 @@ def potreeviewer(args):
     src = os.path.join(potree_dir, "examples/greyhound_helens.html")
     dst = os.path.abspath(os.path.join(args.outdir, "potree/examples/potree.html"))
 
-    replacements = {'192.168.1.12':args.uwsgi_host, '5000':str(args.uwsgi_port)}
+    replacements = {'192.168.1.12': args.uwsgi_host, '5000': str(args.uwsgi_port)}
     with open(src) as infile, open(dst, 'w') as outfile:
         for line in infile:
             for src, target in replacements.items():
@@ -626,9 +534,15 @@ if __name__ == '__main__':
     parser.add_argument('-pg_table', metavar='pg_table', type=str,
                         help=pg_table_help, default=pg_table_default)
 
+    parser.add_argument('-pg_column', metavar='pg_column', type=str,
+                        help='patch column name', default='pa')
+
     pg_host_help = 'postgres host (default: localhost)'
     parser.add_argument('-pg_host', metavar='pg_host', type=str,
                         help=pg_host_help, default='localhost')
+
+    parser.add_argument('-potree_scale', metavar='potree_scale', type=float,
+                        help='scale factor for lopocs streaming', default=0.1)
 
     pg_port_default = 5432
     pg_host_help = 'postgres port (default: {})'.format(pg_port_default)
@@ -638,6 +552,9 @@ if __name__ == '__main__':
     pg_pwd_help = 'postgres password (default: )'
     parser.add_argument('-pg_pwd', metavar='pg_pwd', type=str,
                         help=pg_pwd_help, default='')
+
+    parser.add_argument('-pg_patchcompression', metavar='pg_patchcompression', type=str,
+                        help='patch compression', default='none')
 
     # pdal pipeline
     pdal_patchsize_help = "number of points per patch (default: 500)"
@@ -705,15 +622,19 @@ if __name__ == '__main__':
                 clean(args)
             init_outdir(args)
             header("LOPoCS initialize database")
-            dbcursor = initdb(args, env)
+            initdb(args, env)
             header("LOPoCS fill database")
             pdal_pipeline(files, args, env)
-            create_patch_index(args, dbcursor)
+            session = Session(args.pg_table, args.pg_column)
+            create_patch_index(args, session)
             header("LOPoCS preprocessing")
-            bbox = getbbox()
-            potreeschema(args, bbox, dbcursor)
-            morton_code(args, dbcursor)
-            hierarchy(app, args, bbox)
+            bbox = getbbox(session)
+            pcid = session.load_streaming_schema(
+                args.pg_table, bbox, args.potree_scale, args.epsg,
+                compression=args.pg_patchcompression
+            )
+            morton_code(args, session)
+            hierarchy(app, args, bbox, session, pcid)
             configfile(args, bbox)
 
             if args.potreeviewer:
@@ -723,6 +644,6 @@ if __name__ == '__main__':
         # summary
         print()
         elapsed = time.time() - start_time
-        npoints = Session.patch_size() * Session.approx_row_count()
+        npoints = session.patch_size() * session.approx_row_count()
         print("Duration: {} points processed in {} seconds with LOD {}."
               .format(npoints, elapsed, args.lod_max))

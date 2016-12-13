@@ -155,8 +155,8 @@ class Session():
         Create a metadata table that stores a link between an output schema
         for a given table (to be used by the couple greyhound/potree)
         """
-        cls.query("""
-            create table if not exists pointcloud_streaming_schemas as (
+        cls.execute("""
+            create table if not exists pointcloud_streaming_schemas (
                 tablename varchar unique primary key
                 ,pcid integer references pointcloud_formats(pcid) on delete cascade
             )
@@ -196,20 +196,35 @@ class Session():
         pcid = res[0]
 
         # insert new entry in pointcloud_streaming_schemas
-        self.query("""
+        self.execute("""
             INSERT INTO pointcloud_streaming_schemas (tablename, pcid) VALUES (%s, %s)
         """, (self.table, pcid))
 
         return pcid
 
     @classmethod
+    def execute(cls, query, parameters=None):
+        """Execute a pg statement without fetching results (use for DDL statement)
+        """
+        cur = cls.db.cursor()
+        cur.execute(query, parameters)
+
+    @classmethod
     def query(cls, query, parameters=None):
+        """Performs a single query and fetch all results
+        """
+        cur = cls.db.cursor()
+        cur.execute(query, parameters)
+        return cur.fetchall()
+
+    @classmethod
+    def _query(cls, query, parameters=None):
         """Performs a query and yield results
         """
         cur = cls.db.cursor()
         cur.execute(query, parameters)
         if not cur.rowcount:
-            return None
+            return []
         for row in cur:
             yield row
 
@@ -219,7 +234,7 @@ class Session():
         """
         return [
             line._asdict()
-            for line in cls.query(query, parameters=parameters)
+            for line in cls._query(query, parameters=parameters)
         ]
 
     @classmethod
@@ -227,4 +242,4 @@ class Session():
         """Iterates over results and returns values in a flat list
         (usefull if one column only)
         """
-        return list(chain(*cls.query(query, parameters=parameters)))
+        return list(chain(*cls._query(query, parameters=parameters)))
