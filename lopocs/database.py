@@ -84,7 +84,6 @@ class Session():
 
     def numpoints(self):
         sql = "select sum(pc_numpoints({})) from {}".format(self.column, self.table)
-        raise Exception(sql)
         return self.query_aslist(sql)[0]
 
     def boundingbox(self):
