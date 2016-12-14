@@ -522,8 +522,6 @@ flask:
     DEPTH: 6
     USE_MORTON: True
     CACHE_DIR: ~/.cache/lopocs
-    POTREE_SCH_PCID_SCALE_01: 2
-    POTREE_SCH_PCID_SCALE_001: 3
     STATS: False
 ```
 

@@ -64,7 +64,9 @@ def GreyhoundRead(args):
     if Config.STATS:
         t0 = int(round(time.time() * 1000))
 
-    [read, npoints] = get_points(session, box, offset, session.output_pcid, lod)
+    [read, npoints] = get_points(
+        session, box, offset, session.output_pcid(args['scale']), lod
+    )
 
     if Config.STATS:
         t1 = int(round(time.time() * 1000))
@@ -111,10 +113,7 @@ def GreyhoundHierarchy(args):
     if cached_hcy:
         resp = Response(json.dumps(cached_hcy))
     else:
-        pcid = session.query_aslist("""
-            select pcid from pointcloud_streaming_schemas where tablename = %s
-            """, (session.table,))[0]
-        new_hcy = build_hierarchy_from_pg(session, lod_max, bbox, lod_min, pcid)
+        new_hcy = build_hierarchy_from_pg(session, lod_max, bbox, lod_min)
         utils.write_in_cache(new_hcy, filename)
         resp = Response(json.dumps(new_hcy))
 
@@ -159,6 +158,61 @@ class GreyhoundReadSchema(utils.Schema):
         self.dims.append(utils.Dimension("Blue", "unsigned", 2))
 
 
+def sql_hierarchy(session, box, lod):
+    poly = utils.boundingbox_to_polygon(box)
+    # retrieve the number of points to select in a pcpatch
+    range_min = 0
+    range_max = 1
+
+    if Config.MAX_POINTS_PER_PATCH:
+        range_min = 0
+        range_max = Config.MAX_POINTS_PER_PATCH
+    else:
+        beg = 0
+        for i in range(0, lod):
+            beg = beg + pow(4, i)
+
+        end = 0
+        for i in range(0, lod + 1):
+            end = end + pow(4, i)
+
+        range_min = beg
+        range_max = end - beg
+
+    # build the sql query
+    sql_limit = ""
+    if Config.MAX_PATCHS_PER_QUERY:
+        sql_limit = " limit {0} ".format(Config.MAX_PATCHS_PER_QUERY)
+
+    if Config.USE_MORTON:
+        sql = """
+        select
+            pc_union(pc_filterbetween(pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))
+        from
+            (
+                select {0} from {1}
+                where pc_intersects(
+                    {0},
+                    st_geomfromtext('polygon (({2}))',{3})
+                ) order by morton {8}
+            )_
+        """.format(session.column, session.table, poly, session.srsid(),
+                   range_min, range_max, box[2], box[5], sql_limit)
+    else:
+        sql = """
+        select
+            pc_union(pc_filterbetween(pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))
+        from
+           (
+                select {0} from {1}
+                where pc_intersects(
+                    {0},
+                    st_geomfromtext('polygon (({2}))',{3})
+                ) {8}
+            )_
+        """.format(session.column, session.table, poly, session.srsid(),
+                   range_min, range_max, box[2], box[5], sql_limit)
+    return sql
 # -----------------------------------------------------------------------------
 # utility functions specific greyhound
 # -----------------------------------------------------------------------------
@@ -285,20 +339,20 @@ def fake_hierarchy(begin, end, npatchs):
     return p
 
 
-def build_hierarchy_from_pg_mp_fork(session, code, lod_max, bbox, lod, pcid):
+def build_hierarchy_from_pg_mp_fork(session, code, lod_max, bbox, lod):
     Session.forkme()
-    h = build_hierarchy_from_pg(session, lod_max, bbox, lod, pcid)
+    h = build_hierarchy_from_pg(session, lod_max, bbox, lod)
     return [code, h]
 
 
-def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod, pcid):
+def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
 
     # init a pool of processes: one per leaf
     pool = Pool()
 
     # extract root level
     lod = 0
-    sql = sql_query(session, bbox, pcid, lod)
+    sql = sql_hierarchy(session, bbox, lod)
     pcpatch_wkb = session.query_aslist(sql)[0]
 
     hierarchy = {}
@@ -333,14 +387,14 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod, pcid):
         bbox_seu = [x + width / 2, y, middle, x + width, y + length / 2, up]
 
         # run leaf in processes
-        params = [[session, "nwd", lod_max, bbox_nwd, lod, pcid],
-                  [session, "nwu", lod_max, bbox_nwu, lod, pcid],
-                  [session, "ned", lod_max, bbox_ned, lod, pcid],
-                  [session, "neu", lod_max, bbox_neu, lod, pcid],
-                  [session, "swd", lod_max, bbox_swd, lod, pcid],
-                  [session, "swu", lod_max, bbox_swu, lod, pcid],
-                  [session, "sed", lod_max, bbox_sed, lod, pcid],
-                  [session, "seu", lod_max, bbox_seu, lod, pcid]]
+        params = [[session, "nwd", lod_max, bbox_nwd, lod],
+                  [session, "nwu", lod_max, bbox_nwu, lod],
+                  [session, "ned", lod_max, bbox_ned, lod],
+                  [session, "neu", lod_max, bbox_neu, lod],
+                  [session, "swd", lod_max, bbox_swd, lod],
+                  [session, "swu", lod_max, bbox_swu, lod],
+                  [session, "sed", lod_max, bbox_sed, lod],
+                  [session, "seu", lod_max, bbox_seu, lod]]
         res = pool.starmap(build_hierarchy_from_pg_mp_fork, params)
         pool.close()
         pool.join()
@@ -352,9 +406,9 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod, pcid):
     return hierarchy
 
 
-def build_hierarchy_from_pg(session, lod_max, bbox, lod, pcid):
+def build_hierarchy_from_pg(session, lod_max, bbox, lod):
     # run sql
-    sql = sql_query(session, bbox, pcid, lod)
+    sql = sql_hierarchy(session, bbox, lod)
     pcpatch_wkb = session.query_aslist(sql)[0]
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
@@ -378,49 +432,49 @@ def build_hierarchy_from_pg(session, lod_max, bbox, lod, pcid):
 
         # nwd
         bbox_nwd = [x, y + length / 2, down, x + width / 2, y + length, middle]
-        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod, pcid)
+        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod)
         if h_nwd:
             hierarchy['nwd'] = h_nwd
 
         # nwu
         bbox_nwu = [x, y + length / 2, middle, x + width / 2, y + length, up]
-        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod, pcid)
+        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod)
         if h_nwu:
             hierarchy['nwu'] = h_nwu
 
         # ned
         bbox_ned = [x + width / 2, y + length / 2, down, x + width, y + length, middle]
-        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod, pcid)
+        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod)
         if h_ned:
             hierarchy['ned'] = h_ned
 
         # neu
         bbox_neu = [x + width / 2, y + length / 2, middle, x + width, y + length, up]
-        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod, pcid)
+        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod)
         if h_neu:
             hierarchy['neu'] = h_neu
 
         # swd
         bbox_swd = [x, y, down, x + width / 2, y + length / 2, middle]
-        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod, pcid)
+        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod)
         if h_swd:
             hierarchy['swd'] = h_swd
 
         # swu
         bbox_swu = [x, y, middle, x + width / 2, y + length / 2, up]
-        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod, pcid)
+        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod)
         if h_swu:
             hierarchy['swu'] = h_swu
 
         # sed
         bbox_sed = [x + width / 2, y, down, x + width, y + length / 2, middle]
-        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod, pcid)
+        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod)
         if h_sed:
             hierarchy['sed'] = h_sed
 
         # seu
         bbox_seu = [x + width / 2, y, middle, x + width, y + length / 2, up]
-        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod, pcid)
+        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod)
         if h_seu:
             hierarchy['seu'] = h_seu
 

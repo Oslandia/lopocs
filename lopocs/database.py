@@ -20,6 +20,7 @@ class Session():
 
     """
     db = None
+    cache_pcid = {}
 
     @classmethod
     def forkme(cls):
@@ -143,11 +144,16 @@ class Session():
         schema = self.query_aslist(sql)[0]
         return schema
 
-    @property
-    def output_pcid(self):
-        sql = "select pcid from pointcloud_streaming_schemas where tablename = %s"
-        schema_pcid = self.query_aslist(sql, (self.table,))[0]
-        return schema_pcid
+    def output_pcid(self, scale):
+        if (self.table, scale) in self.cache_pcid:
+            return self.cache_pcid[(self.table, scale)]
+        sql = """
+            select pcid from pointcloud_streaming_schemas
+            where tablename = %s and scale = %s
+        """
+        pcid = self.query_aslist(sql, (self.table, scale))[0]
+        self.cache_pcid[(self.table, scale)] = pcid
+        return pcid
 
     @classmethod
     def create_pointcloud_streaming_table(cls):
@@ -157,8 +163,11 @@ class Session():
         """
         cls.execute("""
             create table if not exists pointcloud_streaming_schemas (
-                tablename varchar unique primary key
-                ,pcid integer references pointcloud_formats(pcid) on delete cascade
+                tablename varchar
+                , pcid integer references pointcloud_formats(pcid) on delete cascade
+                , scale float
+                , primary key (tablename, pcid)
+                , constraint uk_pointcloud_streaming_schemas_table_scale unique (tablename, scale)
             )
             """)
 
@@ -197,9 +206,12 @@ class Session():
 
         # insert new entry in pointcloud_streaming_schemas
         self.execute("""
-            INSERT INTO pointcloud_streaming_schemas (tablename, pcid) VALUES (%s, %s)
-        """, (self.table, pcid))
+            INSERT INTO pointcloud_streaming_schemas (tablename, pcid, scale)
+            VALUES (%s, %s, %s)
+        """, (self.table, pcid, scale))
 
+        # fill cache
+        self.cache_pcid[(table, scale)] = pcid
         return pcid
 
     @classmethod

@@ -11,8 +11,6 @@ class Config(object):
     ROOT_HCY = None
     MAX_PATCHS_PER_QUERY = None
     MAX_POINTS_PER_PATCH = None
-    POTREE_SCH_PCID_SCALE_01 = 2  # scale 0.1
-    POTREE_SCH_PCID_SCALE_001 = 2  # scale 0.01
     USE_MORTON = True
     DEBUG = False
     STATS = True
@@ -49,12 +47,6 @@ class Config(object):
 
         if 'MAX_POINTS_PER_PATCH' in config:
             cls.MAX_POINTS_PER_PATCH = config['MAX_POINTS_PER_PATCH']
-
-        if 'POTREE_SCH_PCID_SCALE_01' in config:
-            cls.POTREE_SCH_PCID_SCALE_01 = config['POTREE_SCH_PCID_SCALE_01']
-
-        if 'POTREE_SCH_PCID_SCALE_001' in config:
-            cls.POTREE_SCH_PCID_SCALE_001 = config['POTREE_SCH_PCID_SCALE_001']
 
         if 'USE_MORTON' in config:
             cls.USE_MORTON = config['USE_MORTON']

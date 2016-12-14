@@ -232,8 +232,6 @@ def initdb(args, env):
     logger("Initialize connection with database")
     app.config['PG_USER'] = args.pg_user
     app.config['PG_HOST'] = args.pg_host
-    app.config['PG_TABLE'] = args.pg_table
-    app.config['PG_COLUMN'] = args.pg_column
     app.config['PG_PASSWORD'] = args.pg_pwd
     app.config['PG_PORT'] = args.pg_port
     app.config['PG_NAME'] = args.pg_db
@@ -393,11 +391,11 @@ def create_patch_index(args, session):
     logger(res=True, valid=True)
 
 
-def hierarchy(app, args, bbox, session, pcid):
+def hierarchy(app, args, bbox, session):
     logger("Generate a hierarchy file for Potree")
 
     # save hierarchy in file
-    hierarchy = greyhound.build_hierarchy_from_pg_mp(session, args.lod_max, bbox, 0, pcid)
+    hierarchy = greyhound.build_hierarchy_from_pg_mp(session, args.lod_max, bbox, 0)
     path = os.path.join(args.lopocs_cachedir, 'potree.hcy')
     f = open(path, 'w')
     json.dump(hierarchy, f)
@@ -423,16 +421,12 @@ def configfile(args, bbox):
            "    PG_USER: {12}\n"
            "    PG_NAME: {0}\n"
            "    PG_PORT: {1}\n"
-           "    PG_COLUMN: pa\n"
-           "    PG_TABLE: {2}\n"
            "    PG_PASSWORD: {13}\n"
            "    ROOT_HCY: {14}\n"
            "    DEPTH: {3}\n"
            "    BB: [{4}, {5}, {6}, {7}, {8}, {9}]\n"
            "    USE_MORTON: True\n"
            "    CACHE_DIR: {10}\n"
-           "    POTREE_SCH_PCID_SCALE_01: 2\n"
-           "    POTREE_SCH_PCID_SCALE_001: 3\n"
            "    STATS: False\n"
            .format(args.pg_db, args.pg_port, args.pg_table, args.lod_max + 1, bbox[0],
                    bbox[1], bbox[2], bbox[3], bbox[4], bbox[5],
@@ -541,9 +535,6 @@ if __name__ == '__main__':
     parser.add_argument('-pg_host', metavar='pg_host', type=str,
                         help=pg_host_help, default='localhost')
 
-    parser.add_argument('-potree_scale', metavar='potree_scale', type=float,
-                        help='scale factor for lopocs streaming', default=0.1)
-
     pg_port_default = 5432
     pg_host_help = 'postgres port (default: {})'.format(pg_port_default)
     parser.add_argument('-pg_port', metavar='pg_port', type=str,
@@ -629,12 +620,16 @@ if __name__ == '__main__':
             create_patch_index(args, session)
             header("LOPoCS preprocessing")
             bbox = getbbox(session)
-            pcid = session.load_streaming_schema(
-                args.pg_table, bbox, args.potree_scale, args.epsg,
+            session.load_streaming_schema(
+                args.pg_table, bbox, 0.1, args.epsg,
+                compression=args.pg_patchcompression
+            )
+            session.load_streaming_schema(
+                args.pg_table, bbox, 0.01, args.epsg,
                 compression=args.pg_patchcompression
             )
             morton_code(args, session)
-            hierarchy(app, args, bbox, session, pcid)
+            hierarchy(app, args, bbox, session)
             configfile(args, bbox)
 
             if args.potreeviewer:
