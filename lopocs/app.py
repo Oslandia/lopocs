@@ -54,7 +54,7 @@ ghd_ns = api.namespace('greyhound/', description='Greyhound Potree Loader')
 
 
 ghd_info = reqparse.RequestParser()
-ghd_info.add_argument('table', type=str, required=True)
+ghd_info.add_argument('table', type=str, required=False, default='patchs')
 ghd_info.add_argument('column', type=str, required=False, default='pa')
 
 
@@ -74,7 +74,7 @@ ghd_read.add_argument('bounds', type=str, required=True)
 ghd_read.add_argument('scale', type=float, required=True)
 ghd_read.add_argument('offset', type=str, required=True)
 ghd_read.add_argument('compress', type=bool, required=True)
-ghd_read.add_argument('table', type=str, required=True)
+ghd_read.add_argument('table', type=str, required=False, default='patchs')
 ghd_read.add_argument('column', type=str, required=False, default='pa')
 
 
@@ -91,7 +91,7 @@ ghd_hierarchy = reqparse.RequestParser()
 ghd_hierarchy.add_argument('depthBegin', type=int, required=True)
 ghd_hierarchy.add_argument('depthEnd', type=int, required=True)
 ghd_hierarchy.add_argument('bounds', type=str, required=True)
-ghd_hierarchy.add_argument('table', type=str, required=True)
+ghd_hierarchy.add_argument('table', type=str, required=False, default='patchs')
 ghd_hierarchy.add_argument('column', type=str, required=False, default='pa')
 
 
