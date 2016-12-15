@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from functools import lru_cache
+from multiprocessing import cpu_count
 
-from psycopg2 import connect
+from psycopg2.pool import ThreadedConnectionPool
 from osgeo.osr import SpatialReference
 
 from . import utils
@@ -36,12 +37,7 @@ class Session():
         query_con = ("postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:"
                      "{PG_PORT}/{PG_NAME}"
                      .format(**app.config))
-        cls.query_con = query_con
-        cls.db = connect(query_con)
-
-        # autocommit mode for performance (we don't need transaction)
-        cls.db.autocommit = True
-
+        cls.pool = ThreadedConnectionPool(1, cpu_count, query_con)
         # keep some configuration element
         cls.dbname = app.config["PG_NAME"]
 
@@ -212,13 +208,20 @@ class Session():
     def execute(cls, query, parameters=None):
         """Execute a pg statement without fetching results (use for DDL statement)
         """
-        cur = cls.db.cursor()
+        conn = cls.pool.getconn()
+        conn.autocommit = True
+        cur = conn.cursor()
         cur.execute(query, parameters)
+        cls.pool.putconn(conn)
 
     @classmethod
     def query(cls, query, parameters=None):
         """Performs a single query and fetch all results
         """
-        cur = cls.db.cursor()
+        conn = cls.pool.getconn()
+        conn.autocommit = True
+        cur = conn.cursor()
         cur.execute(query, parameters)
-        return cur.fetchall()
+        res = cur.fetchall()
+        cls.pool.putconn(conn)
+        return res
