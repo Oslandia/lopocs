@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 from functools import lru_cache
-from itertools import chain
 
 from psycopg2 import connect
-from psycopg2.extras import NamedTupleCursor
 from osgeo.osr import SpatialReference
 
 from . import utils
@@ -23,16 +21,12 @@ class Session():
     cache_pcid = {}
 
     @classmethod
-    def forkme(cls):
-        cls.db = connect(cls.query_con)
-
-    @classmethod
     @lru_cache(maxsize=1)
     def table_list(cls):
         results = cls.query("""
-            select concat(schema, '.', "table") as table, "column" from pointcloud_columns
+            select concat(schema, '.', "table") as table, "column", srid from pointcloud_columns
         """)
-        return [(res.table, res.column) for res in results]
+        return {(res[0], res[1]): res[2] for res in results}
 
     @classmethod
     def init_app(cls, app):
@@ -43,7 +37,7 @@ class Session():
                      "{PG_PORT}/{PG_NAME}"
                      .format(**app.config))
         cls.query_con = query_con
-        cls.db = connect(query_con, cursor_factory=NamedTupleCursor)
+        cls.db = connect(query_con)
 
         # autocommit mode for performance (we don't need transaction)
         cls.db.autocommit = True
@@ -63,6 +57,7 @@ class Session():
             raise LopocsException('table or column does not exists')
         self.column = column
 
+    @property
     def approx_row_count(self):
         schema, table = self.table.split('.')
         sql = """
@@ -73,18 +68,20 @@ class Session():
             ON n.oid = pg_class.relnamespace
             WHERE relname = '{}' and nspname = '{}'
         """.format(table, schema)
-        return self.query_aslist(sql)[0]
+        return self.query(sql)[0][0]
 
+    @property
     def patch_size(self):
         sql = (
-            "select sum(pc_numpoints({})) from {} where id = 1"
+            "select pc_summary({})::json->'npts' as npts from {} limit 1"
             .format(self.column, self.table)
         )
-        return self.query_aslist(sql)[0]
+        return self.query(sql)[0][0]
 
+    @property
     def numpoints(self):
         sql = "select sum(pc_numpoints({})) from {}".format(self.column, self.table)
-        return self.query_aslist(sql)[0]
+        return self.query(sql)[0][0]
 
     def boundingbox(self):
         """
@@ -100,12 +97,12 @@ class Session():
                ,max(pc_patchmax({0}, 'z')) as zmax
             from {1}
         """.format(self.column, self.table)
-        bb_z = self.query_asdict(sql)[0]
+        bb_z = self.query(sql)[0]
 
         bb = {}
         bb.update(extent_2d)
-        bb['zmin'] = float(bb_z['zmin'])
-        bb['zmax'] = float(bb_z['zmax'])
+        bb['zmin'] = float(bb_z[0])
+        bb['zmax'] = float(bb_z[1])
 
         return bb
 
@@ -114,7 +111,7 @@ class Session():
             "SELECT ST_Extent({}::geometry) as table_extent from {}"
             .format(self.column, self.table)
         )
-        bb = self.query_aslist(sql)[0]
+        bb = self.query(sql)[0][0]
         bb_xy = utils.list_from_str_box(bb)
 
         bb = {}
@@ -125,22 +122,20 @@ class Session():
 
         return bb
 
+    @property
     def srsid(self):
-        sql = """
-            select pc_summary({})::json->'srid' as srsid from {} limit 1
-        """.format(self.column, self.table)
-        return self.query_aslist(sql)[0]
+        return self.table_list()[(self.table, self.column)]
 
     def srs(self):
         sr = SpatialReference()
-        sr.ImportFromEPSG(self.srsid())
+        sr.ImportFromEPSG(self.srsid)
         return sr.ExportToWkt()
 
     def schema(self):
         sql = """
             select pc_summary({})::json->'dims' as srsid from {} limit 1
         """.format(self.column, self.table)
-        schema = self.query_aslist(sql)[0]
+        schema = self.query(sql)[0][0]
         return schema
 
     def output_pcid(self, scale):
@@ -150,7 +145,7 @@ class Session():
             select pcid from pointcloud_streaming_schemas
             where tablename = %s and scale = %s
         """
-        pcid = self.query_aslist(sql, (self.table, scale))[0]
+        pcid = self.query(sql, (self.table, scale))[0][0]
         self.cache_pcid[(self.table, scale)] = pcid
         return pcid
 
@@ -183,14 +178,14 @@ class Session():
         z_offset = float("{0:.3f}".format(z_offset))
 
         # check if schema already exists
-        res = Session.query_aslist(
+        res = Session.query(
             """ select pcid from pointcloud_formats
                 where srid = %s and schema = %s
             """, (srid, pcschema.format(**locals()))
         )
         if not res:
             # insert schema
-            res = self.query_aslist(
+            res = self.query(
                 """ with tmp as (
                         select max(pcid) + 1 as pcid
                         from pointcloud_formats
@@ -201,7 +196,7 @@ class Session():
                 """, (srid, pcschema.format(**locals()))
             )
 
-        pcid = res[0]
+        pcid = res[0][0]
 
         # insert new entry in pointcloud_streaming_schemas
         self.execute("""
@@ -227,30 +222,3 @@ class Session():
         cur = cls.db.cursor()
         cur.execute(query, parameters)
         return cur.fetchall()
-
-    @classmethod
-    def _query(cls, query, parameters=None):
-        """Performs a query and yield results
-        """
-        cur = cls.db.cursor()
-        cur.execute(query, parameters)
-        if not cur.rowcount:
-            return []
-        for row in cur:
-            yield row
-
-    @classmethod
-    def query_asdict(cls, query, parameters=None):
-        """Iterates over results and returns namedtuples
-        """
-        return [
-            line._asdict()
-            for line in cls._query(query, parameters=parameters)
-        ]
-
-    @classmethod
-    def query_aslist(cls, query, parameters=None):
-        """Iterates over results and returns values in a flat list
-        (usefull if one column only)
-        """
-        return list(chain(*cls._query(query, parameters=parameters)))

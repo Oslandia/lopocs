@@ -44,8 +44,12 @@ class Sources(Resource):
         """List tables with pointcloud data
         """
         Session.table_list.cache_clear()
-        return Session.table_list()
-
+        resp = [{
+            'table': table,
+            'column': column,
+            'srid': srid
+        } for (table, column), srid in Session.table_list().items()]
+        return resp
 
 # -----------------------------------------------------------------------------
 # greyhound api

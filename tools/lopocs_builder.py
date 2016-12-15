@@ -548,9 +548,9 @@ if __name__ == '__main__':
                         help='patch compression', default='none')
 
     # pdal pipeline
-    pdal_patchsize_help = "number of points per patch (default: 500)"
+    pdal_patchsize_help = "number of points per patch (default: 400)"
     parser.add_argument('-pdal_patchsize', metavar='size', type=int,
-                        help=pdal_patchsize_help, default=500)
+                        help=pdal_patchsize_help, default=400)
 
     pdal_reader_help = "PDAL reader to use in the pipeline (default: las)"
     parser.add_argument('-pdal_reader', metavar='reader', type=str,
@@ -638,7 +638,8 @@ if __name__ == '__main__':
 
         # summary
         print()
+        session = Session(args.pg_table, args.pg_column)
         elapsed = time.time() - start_time
-        npoints = session.patch_size() * session.approx_row_count()
+        npoints = session.patch_size * session.approx_row_count
         print("Duration: {} points processed in {} seconds with LOD {}."
               .format(npoints, elapsed, args.lod_max))

@@ -4,10 +4,14 @@ from flask import Response
 import numpy
 import time
 from lazperf import buildNumpyDescription, Decompressor
-from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor
 
 from .database import Session
-from . import utils
+from .utils import (
+    decimal_default, list_from_str, read_in_cache,
+    write_in_cache, Schema, Dimension, boundingbox_to_polygon,
+    npoints_from_wkb_pcpatch, hexdata_from_wkb_pcpatch, hexa_signed_int32
+)
 from .conf import Config
 from .stats import Stats
 
@@ -16,7 +20,7 @@ LOADER_GREYHOUND_MIN_DEPTH = 8
 
 def GreyhoundInfo(args):
     # invoke a new db session
-    session = Session(args['table'], args.get('column', 'pa'))
+    session = Session(args['table'], args['column'])
     # bounding box
     if (Config.BB):
         box = Config.BB
@@ -24,7 +28,7 @@ def GreyhoundInfo(args):
         box = session.boundingbox()
 
     # number of points for the first patch
-    npoints = session.approx_row_count() * session.patch_size()
+    npoints = session.approx_row_count * session.patch_size
 
     # srs
     srs = session.srs()
@@ -41,7 +45,8 @@ def GreyhoundInfo(args):
         "numPoints": npoints,
         "schema": schema_json,
         "srs": srs,
-        "type": "octree"}, default=utils.decimal_default)
+        "type": "octree"
+    }, default=decimal_default)
 
     # build the flask response
     resp = Response(info)
@@ -56,8 +61,8 @@ def GreyhoundRead(args):
     session = Session(args['table'], args.get('column', 'pa'))
 
     # prepare parameters
-    offset = utils.list_from_str(args['offset'])
-    box = utils.list_from_str(args['bounds'])
+    offset = list_from_str(args['offset'])
+    box = list_from_str(args['bounds'])
     lod = args['depthEnd'] - LOADER_GREYHOUND_MIN_DEPTH - 1
 
     # get points in database
@@ -97,7 +102,7 @@ def GreyhoundHierarchy(args):
     if lod_max > (Config.DEPTH - 1):
         lod_max = Config.DEPTH - 1
 
-    bbox = utils.list_from_str(args['bounds'])
+    bbox = list_from_str(args['bounds'])
 
     if lod_min == 0 and Config.ROOT_HCY:
         filename = Config.ROOT_HCY
@@ -105,7 +110,7 @@ def GreyhoundHierarchy(args):
         filename = ("{0}_{1}_{2}_{3}_{4}.hcy"
                     .format(session.table, session.column, lod_min, lod_max,
                             '_'.join(str(e) for e in bbox)))
-    cached_hcy = utils.read_in_cache(filename)
+    cached_hcy = read_in_cache(filename)
 
     if Config.DEBUG:
         print("hierarchy file: {0}".format(filename))
@@ -113,8 +118,8 @@ def GreyhoundHierarchy(args):
     if cached_hcy:
         resp = Response(json.dumps(cached_hcy))
     else:
-        new_hcy = build_hierarchy_from_pg(session, lod_max, bbox, lod_min)
-        utils.write_in_cache(new_hcy, filename)
+        new_hcy = build_hierarchy_from_pg_mp(session, lod_max, bbox, lod_min)
+        write_in_cache(new_hcy, filename)
         resp = Response(json.dumps(new_hcy))
 
     # resp = Response(json.dumps(fake_hierarchy(0, 6, 10000)))
@@ -128,38 +133,38 @@ def GreyhoundHierarchy(args):
 # -----------------------------------------------------------------------------
 # schema
 # -----------------------------------------------------------------------------
-class GreyhoundInfoSchema(utils.Schema):
+class GreyhoundInfoSchema(Schema):
 
     def __init__(self):
-        utils.Schema.__init__(self)
+        Schema.__init__(self)
 
-        self.dims.append(utils.Dimension("X", "floating", 8))
-        self.dims.append(utils.Dimension("Y", "floating", 8))
-        self.dims.append(utils.Dimension("Z", "floating", 8))
-        self.dims.append(utils.Dimension("Intensity", "unsigned", 2))
-        self.dims.append(utils.Dimension("Classification", "unsigned", 1))
-        self.dims.append(utils.Dimension("Red", "unsigned", 2))
-        self.dims.append(utils.Dimension("Green", "unsigned", 2))
-        self.dims.append(utils.Dimension("Blue", "unsigned", 2))
+        self.dims.append(Dimension("X", "floating", 8))
+        self.dims.append(Dimension("Y", "floating", 8))
+        self.dims.append(Dimension("Z", "floating", 8))
+        self.dims.append(Dimension("Intensity", "unsigned", 2))
+        self.dims.append(Dimension("Classification", "unsigned", 1))
+        self.dims.append(Dimension("Red", "unsigned", 2))
+        self.dims.append(Dimension("Green", "unsigned", 2))
+        self.dims.append(Dimension("Blue", "unsigned", 2))
 
 
-class GreyhoundReadSchema(utils.Schema):
+class GreyhoundReadSchema(Schema):
 
     def __init__(self):
-        utils.Schema.__init__(self)
+        Schema.__init__(self)
 
-        self.dims.append(utils.Dimension("X", "signed", 4))
-        self.dims.append(utils.Dimension("Y", "signed", 4))
-        self.dims.append(utils.Dimension("Z", "signed", 4))
-        self.dims.append(utils.Dimension("Intensity", "unsigned", 2))
-        self.dims.append(utils.Dimension("Classification", "unsigned", 1))
-        self.dims.append(utils.Dimension("Red", "unsigned", 2))
-        self.dims.append(utils.Dimension("Green", "unsigned", 2))
-        self.dims.append(utils.Dimension("Blue", "unsigned", 2))
+        self.dims.append(Dimension("X", "signed", 4))
+        self.dims.append(Dimension("Y", "signed", 4))
+        self.dims.append(Dimension("Z", "signed", 4))
+        self.dims.append(Dimension("Intensity", "unsigned", 2))
+        self.dims.append(Dimension("Classification", "unsigned", 1))
+        self.dims.append(Dimension("Red", "unsigned", 2))
+        self.dims.append(Dimension("Green", "unsigned", 2))
+        self.dims.append(Dimension("Blue", "unsigned", 2))
 
 
 def sql_hierarchy(session, box, lod):
-    poly = utils.boundingbox_to_polygon(box)
+    poly = boundingbox_to_polygon(box)
     # retrieve the number of points to select in a pcpatch
     range_min = 0
     range_max = 1
@@ -196,7 +201,7 @@ def sql_hierarchy(session, box, lod):
                     st_geomfromtext('polygon (({2}))',{3})
                 ) order by morton {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid(),
+        """.format(session.column, session.table, poly, session.srsid,
                    range_min, range_max, box[2], box[5], sql_limit)
     else:
         sql = """
@@ -210,14 +215,13 @@ def sql_hierarchy(session, box, lod):
                     st_geomfromtext('polygon (({2}))',{3})
                 ) {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid(),
+        """.format(session.column, session.table, poly, session.srsid,
                    range_min, range_max, box[2], box[5], sql_limit)
     return sql
-# -----------------------------------------------------------------------------
-# utility functions specific greyhound
-# -----------------------------------------------------------------------------
+
+
 def sql_query(session, box, schema_pcid, lod):
-    poly = utils.boundingbox_to_polygon(box)
+    poly = boundingbox_to_polygon(box)
     # retrieve the number of points to select in a pcpatch
     range_min = 0
     range_max = 1
@@ -261,7 +265,7 @@ def sql_query(session, box, schema_pcid, lod):
                     st_geomfromtext('polygon (({2}))',{3})
                 ) order by morton {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid(),
+        """.format(session.column, session.table, poly, session.srsid,
                    range_min, range_max, box[2], box[5], sql_limit, schema_pcid)
     else:
         sql = """
@@ -282,7 +286,7 @@ def sql_query(session, box, schema_pcid, lod):
                     st_geomfromtext('polygon (({2}))',{3})
                 ) {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid(),
+        """.format(session.column, session.table, poly, session.srsid,
                    range_min, range_max, box[2], box[5], sql_limit, schema_pcid)
     return sql
 
@@ -297,19 +301,19 @@ def get_points(session, box, offset, schema_pcid, lod):
         print(sql)
 
     try:
-        pcpatch_wkb = session.query_aslist(sql)[0]
+        pcpatch_wkb = session.query(sql)[0][0]
         # to test output from pgpointcloud : decompress(points)
 
         # retrieve number of points in wkb pgpointcloud patch
-        npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
 
         # extract data
-        hexbuffer = utils.hexdata_from_wkb_pcpatch(pcpatch_wkb)
+        hexbuffer = hexdata_from_wkb_pcpatch(pcpatch_wkb)
 
         # add number of points
-        hexbuffer += utils.hexa_signed_int32(npoints)
+        hexbuffer += hexa_signed_int32(npoints)
     except:
-        hexbuffer.extend(utils.hexa_signed_int32(0))
+        hexbuffer.extend(hexa_signed_int32(0))
 
     if Config.DEBUG:
         print("LOD: ", lod)
@@ -339,30 +343,21 @@ def fake_hierarchy(begin, end, npatchs):
     return p
 
 
-def build_hierarchy_from_pg_mp_fork(session, code, lod_max, bbox, lod):
-    Session.forkme()
-    h = build_hierarchy_from_pg(session, lod_max, bbox, lod)
-    return [code, h]
-
-
 def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
-
-    # init a pool of processes: one per leaf
-    pool = Pool()
 
     # extract root level
     lod = 0
     sql = sql_hierarchy(session, bbox, lod)
-    pcpatch_wkb = session.query_aslist(sql)[0]
+    pcpatch_wkb = session.query(sql)[0][0]
 
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1
 
-    # run leaf in forked processes
+    # run leaf in threads
     if lod <= lod_max:
         # width / length / height
         width = bbox[3] - bbox[0]
@@ -386,22 +381,20 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
         bbox_sed = [x + width / 2, y, down, x + width, y + length / 2, middle]
         bbox_seu = [x + width / 2, y, middle, x + width, y + length / 2, up]
 
-        # run leaf in processes
-        params = [[session, "nwd", lod_max, bbox_nwd, lod],
-                  [session, "nwu", lod_max, bbox_nwu, lod],
-                  [session, "ned", lod_max, bbox_ned, lod],
-                  [session, "neu", lod_max, bbox_neu, lod],
-                  [session, "swd", lod_max, bbox_swd, lod],
-                  [session, "swu", lod_max, bbox_swu, lod],
-                  [session, "sed", lod_max, bbox_sed, lod],
-                  [session, "seu", lod_max, bbox_seu, lod]]
-        res = pool.starmap(build_hierarchy_from_pg_mp_fork, params)
-        pool.close()
-        pool.join()
+        # run leaf in threads
+        futures = {}
+        with ThreadPoolExecutor(max_workers=8) as e:
+            futures["nwd"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwd, lod)
+            futures["nwu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwu, lod)
+            futures["ned"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_ned, lod)
+            futures["neu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_neu, lod)
+            futures["swd"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_swd, lod)
+            futures["swu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_swu, lod)
+            futures["sed"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_sed, lod)
+            futures["seu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_seu, lod)
 
-        for i in range(0, len(res)):
-            r = res[i]
-            hierarchy[r[0]] = r[1]
+        for code, hier in futures.items():
+            hierarchy[code] = hier.result()
 
     return hierarchy
 
@@ -409,10 +402,10 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
 def build_hierarchy_from_pg(session, lod_max, bbox, lod):
     # run sql
     sql = sql_hierarchy(session, bbox, lod)
-    pcpatch_wkb = session.query_aslist(sql)[0]
+    pcpatch_wkb = session.query(sql)[0][0]
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1
@@ -487,9 +480,9 @@ def decompress(points):
     """
 
     # retrieve number of points in wkb pgpointcloud patch
-    npoints = utils.npoints_from_wkb_pcpatch(points)
-    hexbuffer = utils.hexdata_from_wkb_pcpatch(points)
-    hexbuffer += utils.hexa_signed_int32(npoints)
+    npoints = npoints_from_wkb_pcpatch(points)
+    hexbuffer = hexdata_from_wkb_pcpatch(points)
+    hexbuffer += hexa_signed_int32(npoints)
 
     # uncompress
     s = json.dumps(GreyhoundReadSchema().json()).replace("\\", "")
