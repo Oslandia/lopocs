@@ -39,7 +39,6 @@ class ThreeDTilesInfo(object):
 
         # build the flask response
         resp = Response(info)
-        resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
 
         return resp
@@ -64,7 +63,6 @@ class ThreeDTilesRead(object):
 
         # build the flask response
         resp = Response(tile.to_array().tostring())
-        resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'application/octet-stream'
 
         return resp
