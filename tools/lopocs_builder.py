@@ -358,7 +358,7 @@ def pdal_pipeline(files, args, env):
 
 def getbbox(session):
     logger("Extract bounding box")
-    fullbbox = session.boundingbox()
+    fullbbox = session.boundingbox
     bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
             fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
     logger(res=True, valid=True)
@@ -619,15 +619,13 @@ if __name__ == '__main__':
             session = Session(args.pg_table, args.pg_column)
             create_patch_index(args, session)
             header("LOPoCS preprocessing")
+            session.load_lopocs_metadata(
+                args.pg_table, 0.1, args.epsg
+            )
+            session.load_lopocs_metadata(
+                args.pg_table, 0.01, args.epsg
+            )
             bbox = getbbox(session)
-            session.load_streaming_schema(
-                args.pg_table, bbox, 0.1, args.epsg,
-                compression=args.pg_patchcompression
-            )
-            session.load_streaming_schema(
-                args.pg_table, bbox, 0.01, args.epsg,
-                compression=args.pg_patchcompression
-            )
             morton_code(args, session)
             hierarchy(app, args, bbox, session)
             configfile(args, bbox)
