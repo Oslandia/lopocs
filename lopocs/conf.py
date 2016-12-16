@@ -42,9 +42,6 @@ class Config(object):
         if 'ROOT_HCY' in config:
             cls.ROOT_HCY = config['ROOT_HCY']
 
-        if 'MAX_PATCHS_PER_QUERY' in config:
-            cls.MAX_PATCHS_PER_QUERY = config['MAX_PATCHS_PER_QUERY']
-
         if 'MAX_POINTS_PER_PATCH' in config:
             cls.MAX_POINTS_PER_PATCH = config['MAX_POINTS_PER_PATCH']
 

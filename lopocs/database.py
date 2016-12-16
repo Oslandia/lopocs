@@ -2,11 +2,16 @@
 from functools import lru_cache
 from multiprocessing import cpu_count
 
+import psycopg2.extras
+import psycopg2.extensions
 from psycopg2.pool import ThreadedConnectionPool
 from osgeo.osr import SpatialReference
 
 from . import utils
 from .potreeschema import pcschema
+
+
+psycopg2.extensions.register_adapter(dict, psycopg2.extras.Json)
 
 
 class LopocsException(Exception):
@@ -25,7 +30,8 @@ class Session():
     @lru_cache(maxsize=1)
     def table_list(cls):
         results = cls.query("""
-            select concat(schema, '.', "table") as table, "column", srid from pointcloud_columns
+            select concat(schema, '.', "table") as table, "column", srid
+            from pointcloud_columns
         """)
         return {(res[0], res[1]): res[2] for res in results}
 
@@ -37,7 +43,7 @@ class Session():
         query_con = ("postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:"
                      "{PG_PORT}/{PG_NAME}"
                      .format(**app.config))
-        cls.pool = ThreadedConnectionPool(1, cpu_count(), query_con)
+        cls.pool = ThreadedConnectionPool(1, cpu_count() * 2, query_con)
         # keep some configuration element
         cls.dbname = app.config["PG_NAME"]
 
@@ -75,11 +81,37 @@ class Session():
         return self.query(sql)[0][0]
 
     @property
+    @lru_cache(maxsize=1)
+    def max_patchs_per_query(self):
+        sql = """
+            select max_patchs_per_query
+            from pointcloud_lopocs
+            where tablename = %s limit 1
+        """
+        value = self.query(sql, (self.table, ))[0][0]
+        return value
+
+    @property
     def numpoints(self):
-        sql = "select sum(pc_numpoints({})) from {}".format(self.column, self.table)
+        sql = """
+            select sum(pc_numpoints({}))
+            from {}
+        """.format(self.column, self.table)
         return self.query(sql)[0][0]
 
+    @property
     def boundingbox(self):
+        sql = """
+            select bbox
+            from pointcloud_lopocs
+            where tablename = %s limit 1
+        """
+        res = self.query(sql, (self.table, ))
+        if not res:
+            return ''
+        return res[0][0]
+
+    def compute_boundingbox(self):
         """
         It's faster to use st_extent to find x/y extent then to use
         pc_intersect to find the z extent than using pc_intersect for each
@@ -129,7 +161,9 @@ class Session():
 
     def schema(self):
         sql = """
-            select pc_summary({})::json->'dims' as srsid from {} limit 1
+            select pc_summary({})::json->'dims' as srsid
+            from {}
+            limit 1
         """.format(self.column, self.table)
         schema = self.query(sql)[0][0]
         return schema
@@ -138,7 +172,7 @@ class Session():
         if (self.table, scale) in self.cache_pcid:
             return self.cache_pcid[(self.table, scale)]
         sql = """
-            select pcid from pointcloud_streaming_schemas
+            select pcid from pointcloud_lopocs
             where tablename = %s and scale = %s
         """
         pcid = self.query(sql, (self.table, scale))[0][0]
@@ -146,25 +180,31 @@ class Session():
         return pcid
 
     @classmethod
-    def create_pointcloud_streaming_table(cls):
+    def create_pointcloud_lopocs_table(cls):
         """
         Create a metadata table that stores a link between an output schema
         for a given table (to be used by the couple greyhound/potree)
         """
         cls.execute("""
-            create table if not exists pointcloud_streaming_schemas (
+            create table if not exists pointcloud_lopocs (
                 tablename varchar
                 , pcid integer references pointcloud_formats(pcid) on delete cascade
                 , scale float
+                , max_patchs_per_query integer default 4096
+                , bbox jsonb
                 , primary key (tablename, pcid)
-                , constraint uk_pointcloud_streaming_schemas_table_scale unique (tablename, scale)
+                , constraint uk_pointcloud_lopocs_table_scale unique (tablename, scale)
             )
             """)
 
-    def load_streaming_schema(self, table, bbox, scale, srid, compression='none'):
+    def load_lopocs_metadata(self, table, scale, srid, compression='none'):
         """
         Load schema used to stream patches with greyhound
         """
+        fullbbox = self.compute_boundingbox()
+        bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
+                fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
+
         x_offset = bbox[0] + (bbox[3] - bbox[0]) / 2
         y_offset = bbox[1] + (bbox[4] - bbox[1]) / 2
         z_offset = bbox[2] + (bbox[5] - bbox[2]) / 2
@@ -194,11 +234,11 @@ class Session():
 
         pcid = res[0][0]
 
-        # insert new entry in pointcloud_streaming_schemas
+        # insert new entry in pointcloud_lopocs
         self.execute("""
-            INSERT INTO pointcloud_streaming_schemas (tablename, pcid, scale)
-            VALUES (%s, %s, %s)
-        """, (self.table, pcid, scale))
+            INSERT INTO pointcloud_lopocs (tablename, pcid, scale, bbox)
+            VALUES (%s, %s, %s, %s)
+        """, (self.table, pcid, scale, fullbbox))
 
         # fill cache
         self.cache_pcid[(table, scale)] = pcid

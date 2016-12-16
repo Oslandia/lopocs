@@ -2,7 +2,6 @@
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import cpu_count
 
 from flask import Response
 import numpy
@@ -27,7 +26,7 @@ def GreyhoundInfo(args):
     if (Config.BB):
         box = Config.BB
     else:
-        box = session.boundingbox()
+        box = session.boundingbox
 
     # number of points for the first patch
     npoints = session.approx_row_count * session.patch_size
@@ -188,8 +187,8 @@ def sql_hierarchy(session, box, lod):
 
     # build the sql query
     sql_limit = ""
-    if Config.MAX_PATCHS_PER_QUERY:
-        sql_limit = " limit {0} ".format(Config.MAX_PATCHS_PER_QUERY)
+    if session.max_patchs_per_query:
+        sql_limit = " limit {0} ".format(session.max_patchs_per_query)
 
     if Config.USE_MORTON:
         sql = """
@@ -245,8 +244,8 @@ def sql_query(session, box, schema_pcid, lod):
 
     # build the sql query
     sql_limit = ""
-    if Config.MAX_PATCHS_PER_QUERY:
-        sql_limit = " limit {0} ".format(Config.MAX_PATCHS_PER_QUERY)
+    if session.max_patchs_per_query:
+        sql_limit = " limit {0} ".format(session.max_patchs_per_query)
 
     if Config.USE_MORTON:
         sql = """
@@ -385,7 +384,7 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
 
         # run leaf in threads
         futures = {}
-        with ThreadPoolExecutor(max_workers=cpu_count()) as e:
+        with ThreadPoolExecutor(max_workers=8) as e:
             futures["nwd"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwd, lod)
             futures["nwu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwu, lod)
             futures["ned"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_ned, lod)

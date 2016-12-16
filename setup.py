@@ -14,7 +14,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 requirements = (
     'flask>=0.10.1',
     'flask-restplus==0.9.2',
-    'psycopg2>=2.6.1',
+    'psycopg2>=2.6.2',
     'pyyaml',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
