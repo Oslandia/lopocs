@@ -51,7 +51,6 @@ def GreyhoundInfo(args):
 
     # build the flask response
     resp = Response(info)
-    resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Content-Type'] = 'text/plain'
 
     return resp
@@ -87,7 +86,6 @@ def GreyhoundRead(args):
 
     # build flask response
     resp = Response(read)
-    resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Content-Type'] = 'application/octet-stream'
 
     return resp
@@ -125,7 +123,6 @@ def GreyhoundHierarchy(args):
 
     # resp = Response(json.dumps(fake_hierarchy(0, 6, 10000)))
 
-    resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Content-Type'] = 'text/plain'
 
     return resp
