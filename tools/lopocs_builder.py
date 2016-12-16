@@ -620,10 +620,10 @@ if __name__ == '__main__':
             create_patch_index(args, session)
             header("LOPoCS preprocessing")
             session.load_lopocs_metadata(
-                args.pg_table, 0.1, args.epsg
+                args.pg_table, 0.1, args.epsg, args.pg_patchcompression
             )
             session.load_lopocs_metadata(
-                args.pg_table, 0.01, args.epsg
+                args.pg_table, 0.01, args.epsg, args.pg_patchcompression
             )
             bbox = getbbox(session)
             morton_code(args, session)
