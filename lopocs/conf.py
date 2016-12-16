@@ -13,7 +13,7 @@ class Config(object):
     MAX_POINTS_PER_PATCH = None
     USE_MORTON = True
     DEBUG = False
-    STATS = True
+    STATS = False
     STATS_SERVER_PORT = 6379
 
     CESIUM_COLOR = "colors"
