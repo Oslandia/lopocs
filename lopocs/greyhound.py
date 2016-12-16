@@ -117,11 +117,9 @@ def GreyhoundHierarchy(args):
     if cached_hcy:
         resp = Response(json.dumps(cached_hcy))
     else:
-        new_hcy = build_hierarchy_from_pg_mp(session, lod_max, bbox, lod_min)
+        new_hcy = build_hierarchy_from_pg(session, lod_min, lod_max, bbox)
         write_in_cache(new_hcy, filename)
         resp = Response(json.dumps(new_hcy))
-
-    # resp = Response(json.dumps(fake_hierarchy(0, 6, 10000)))
 
     resp.headers['Content-Type'] = 'text/plain'
 
@@ -341,10 +339,8 @@ def fake_hierarchy(begin, end, npatchs):
     return p
 
 
-def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
+def build_hierarchy_from_pg(session, lod, lod_max, bbox):
 
-    # extract root level
-    lod = 0
     sql = sql_hierarchy(session, bbox, lod)
     pcpatch_wkb = session.query(sql)[0][0]
 
@@ -382,14 +378,14 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
         # run leaf in threads
         futures = {}
         with ThreadPoolExecutor(max_workers=8) as e:
-            futures["nwd"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwd, lod)
-            futures["nwu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_nwu, lod)
-            futures["ned"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_ned, lod)
-            futures["neu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_neu, lod)
-            futures["swd"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_swd, lod)
-            futures["swu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_swu, lod)
-            futures["sed"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_sed, lod)
-            futures["seu"] = e.submit(build_hierarchy_from_pg, session, lod_max, bbox_seu, lod)
+            futures["nwd"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_nwd)
+            futures["nwu"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_nwu)
+            futures["ned"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_ned)
+            futures["neu"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_neu)
+            futures["swd"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_swd)
+            futures["swu"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_swu)
+            futures["sed"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_sed)
+            futures["seu"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_seu)
 
         for code, hier in futures.items():
             hierarchy[code] = hier.result()
@@ -397,7 +393,7 @@ def build_hierarchy_from_pg_mp(session, lod_max, bbox, lod):
     return hierarchy
 
 
-def build_hierarchy_from_pg(session, lod_max, bbox, lod):
+def build_hierarchy_from_pg_single(session, lod, lod_max, bbox):
     # run sql
     sql = sql_hierarchy(session, bbox, lod)
     pcpatch_wkb = session.query(sql)[0][0]
@@ -423,49 +419,49 @@ def build_hierarchy_from_pg(session, lod_max, bbox, lod):
 
         # nwd
         bbox_nwd = [x, y + length / 2, down, x + width / 2, y + length, middle]
-        h_nwd = build_hierarchy_from_pg(session, lod_max, bbox_nwd, lod)
+        h_nwd = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_nwd)
         if h_nwd:
             hierarchy['nwd'] = h_nwd
 
         # nwu
         bbox_nwu = [x, y + length / 2, middle, x + width / 2, y + length, up]
-        h_nwu = build_hierarchy_from_pg(session, lod_max, bbox_nwu, lod)
+        h_nwu = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_nwu)
         if h_nwu:
             hierarchy['nwu'] = h_nwu
 
         # ned
         bbox_ned = [x + width / 2, y + length / 2, down, x + width, y + length, middle]
-        h_ned = build_hierarchy_from_pg(session, lod_max, bbox_ned, lod)
+        h_ned = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_ned)
         if h_ned:
             hierarchy['ned'] = h_ned
 
         # neu
         bbox_neu = [x + width / 2, y + length / 2, middle, x + width, y + length, up]
-        h_neu = build_hierarchy_from_pg(session, lod_max, bbox_neu, lod)
+        h_neu = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_neu)
         if h_neu:
             hierarchy['neu'] = h_neu
 
         # swd
         bbox_swd = [x, y, down, x + width / 2, y + length / 2, middle]
-        h_swd = build_hierarchy_from_pg(session, lod_max, bbox_swd, lod)
+        h_swd = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_swd)
         if h_swd:
             hierarchy['swd'] = h_swd
 
         # swu
         bbox_swu = [x, y, middle, x + width / 2, y + length / 2, up]
-        h_swu = build_hierarchy_from_pg(session, lod_max, bbox_swu, lod)
+        h_swu = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_swu)
         if h_swu:
             hierarchy['swu'] = h_swu
 
         # sed
         bbox_sed = [x + width / 2, y, down, x + width, y + length / 2, middle]
-        h_sed = build_hierarchy_from_pg(session, lod_max, bbox_sed, lod)
+        h_sed = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_sed)
         if h_sed:
             hierarchy['sed'] = h_sed
 
         # seu
         bbox_seu = [x + width / 2, y, middle, x + width, y + length / 2, up]
-        h_seu = build_hierarchy_from_pg(session, lod_max, bbox_seu, lod)
+        h_seu = build_hierarchy_from_pg_single(session, lod, lod_max, bbox_seu)
         if h_seu:
             hierarchy['seu'] = h_seu
 
