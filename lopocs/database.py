@@ -197,7 +197,7 @@ class Session():
             )
             """)
 
-    def load_lopocs_metadata(self, table, scale, srid, compression='none'):
+    def load_lopocs_metadata(self, table, scale, srid):
         """
         Load schema used to stream patches with greyhound
         """
