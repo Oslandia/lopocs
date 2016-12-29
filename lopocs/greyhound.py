@@ -377,7 +377,7 @@ def build_hierarchy_from_pg(session, lod, lod_max, bbox):
 
         # run leaf in threads
         futures = {}
-        with ThreadPoolExecutor(max_workers=8) as e:
+        with ThreadPoolExecutor(max_workers=Session.pool.maxconn) as e:
             futures["nwd"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_nwd)
             futures["nwu"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_nwu)
             futures["ned"] = e.submit(build_hierarchy_from_pg_single, session, lod, lod_max, bbox_ned)

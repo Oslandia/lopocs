@@ -43,7 +43,7 @@ class Session():
         query_con = ("postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:"
                      "{PG_PORT}/{PG_NAME}"
                      .format(**app.config))
-        cls.pool = ThreadedConnectionPool(1, cpu_count() * 2, query_con)
+        cls.pool = ThreadedConnectionPool(1, cpu_count(), query_con)
         # keep some configuration element
         cls.dbname = app.config["PG_NAME"]
 
