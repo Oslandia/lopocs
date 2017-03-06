@@ -166,7 +166,7 @@ def sql_query(box, schema_pcid, lod):
                "where pc_intersects({0}, st_geomfromtext('polygon (("
                "{2}))',{3})) order by morton {8})_;"
                .format(Session.column, Session.table,
-                       poly, 4978, range_min, range_max,
+                       poly, Session.srsid(), range_min, range_max,
                        box[2]-0.1, box[5]+0.1, sql_limit,
                        schema_pcid))
     else:
