@@ -17,7 +17,7 @@ GEOMETRIC_ERROR_DEFAULT = 2000
 # -----------------------------------------------------------------------------
 class ThreeDTilesInfo(object):
 
-    def run(self, args):
+    def run(self):
         # bounding box
         if (Config.BB):
             box = Config.BB
