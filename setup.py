@@ -12,8 +12,8 @@ GDAL_MAX = '{0}.{1}.{2}'.format(GDAL_VERSION, GDAL_REVISION_MAJOR, int(GDAL_REVI
 here = os.path.abspath(os.path.dirname(__file__))
 
 requirements = (
-    'flask>=0.10.1',
-    'flask-restplus==0.9.2',
+    'flask>=0.12',
+    'flask-restplus==0.10.0',
     'psycopg2>=2.6.2',
     'pyyaml',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
