@@ -112,23 +112,28 @@ class Hierarchy(Resource):
 # -----------------------------------------------------------------------------
 threedtiles_ns = api.namespace('3dtiles/',
                                description='3DTiles format')
+threedtiles_info = reqparse.RequestParser()
+threedtiles_info.add_argument('table', type=str, required=False, default='patchs')
+threedtiles_info.add_argument('column', type=str, required=False, default='pa')
 
 
-# info
 @threedtiles_ns.route("/info")
 class ThreeDTilesInfo(Resource):
 
+    @api.expect(threedtiles_info, validate=True)
     def get(self):
-        return threedtiles.ThreeDTilesInfo().run()
+        args = threedtiles_info.parse_args()
+        return threedtiles.ThreeDTilesInfo().run(args)
 
 
 # read
 threedtiles_read = reqparse.RequestParser()
-threedtiles_read.add_argument('v', type=float, required=True)
 threedtiles_read.add_argument('bounds', type=str, required=True)
 threedtiles_read.add_argument('lod', type=int, required=True)
 threedtiles_read.add_argument('offsets', type=str, required=True)
 threedtiles_read.add_argument('scale', type=float, required=True)
+threedtiles_read.add_argument('table', type=str, required=False, default='patchs')
+threedtiles_read.add_argument('column', type=str, required=False, default='pa')
 
 
 @threedtiles_ns.route("/read.pnts")

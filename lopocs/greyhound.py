@@ -22,17 +22,13 @@ LOADER_GREYHOUND_MIN_DEPTH = 8
 def GreyhoundInfo(args):
     # invoke a new db session
     session = Session(args['table'], args['column'])
-    # bounding box
-    if (Config.BB):
-        box = Config.BB
-    else:
-        box = session.boundingbox
+    box = session.boundingbox
 
     # number of points for the first patch
     npoints = session.approx_row_count * session.patch_size
 
     # srs
-    srs = session.srs()
+    srs = session.srs
 
     # build the greyhound schema
     schema_json = GreyhoundInfoSchema().json()
@@ -263,6 +259,7 @@ def sql_query(session, box, schema_pcid, lod):
             )_
         """.format(session.column, session.table, poly, session.srsid,
                    range_min, range_max, box[2], box[5], sql_limit, schema_pcid)
+
     else:
         sql = """
         select

@@ -154,6 +154,7 @@ class Session():
     def srsid(self):
         return self.table_list()[(self.table, self.column)]
 
+    @property
     def srs(self):
         sr = SpatialReference()
         sr.ImportFromEPSG(self.srsid)
