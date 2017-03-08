@@ -168,7 +168,7 @@ def sql_query(session, box, schema_pcid, lod):
                "(select {0} from {1} where pc_intersects({0}, "
                "st_geomfromtext('polygon (({2}))',{3})) {8})_;"
                .format(session.column, session.table,
-                       poly, session.srsid(), range_min, range_max,
+                       poly, session.srsid, range_min, range_max,
                        box[2], box[5], sql_limit,
                        schema_pcid))
 
