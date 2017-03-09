@@ -159,7 +159,7 @@ def sql_query(box, schema_pcid, lod):
         sql_limit = " limit {0} ".format(Config.MAX_PATCHS_PER_QUERY)
 
     if Config.USE_MORTON:
-        sql = ("select pc_compress(pc_patchtransform(pc_union("
+        sql = ("select pc_compress(pc_setpcid(pc_union("
                "pc_filterbetween( "
                "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), {9}), 'laz') from "
                "(select {0} from {1} "
@@ -170,7 +170,7 @@ def sql_query(box, schema_pcid, lod):
                        box[2]-0.1, box[5]+0.1, sql_limit,
                        schema_pcid))
     else:
-        sql = ("select pc_compress(pc_patchtransform(pc_union("
+        sql = ("select pc_compress(pc_setpcid(pc_union("
                "pc_filterbetween( "
                "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), {9}), 'laz') from "
                "(select {0} from {1} where pc_intersects({0}, "
