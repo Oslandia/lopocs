@@ -1,20 +1,11 @@
 flask:
     DEBUG: True
-    LOG_LEVEL: debug
     PG_HOST: localhost
     PG_NAME: db
     PG_PORT: 5432
     PG_USER: user
     PG_PASSWORD:
-    PG_COLUMN: pa
-    PG_TABLE: pa
-    BB: [560022.41, 5114840.63, 1116.21, 564678.43, 5120950.88, 2539.38]
-    DEPTH: 6
     USE_MORTON: True
     CACHE_DIR: /home/user/.cache/lopocs
-    MAX_PATCHS_PER_QUERY: 1024
-    MAX_POINTS_PER_PATCH: 1
-    POTREE_SCH_PCID_SCALE_01: 2
-    POTREE_SCH_PCID_SCALE_001: 2
     STATS: False
     STATS_SERVER_PORT: 6379
