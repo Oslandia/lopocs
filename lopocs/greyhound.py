@@ -222,6 +222,7 @@ def sql_query(session, box, schema_pcid, lod):
         range_min = 0
         range_max = Config.MAX_POINTS_PER_PATCH
     else:
+        # adapted to midoc filter
         beg = 0
         for i in range(0, lod):
             beg = beg + pow(4, i)
@@ -242,7 +243,7 @@ def sql_query(session, box, schema_pcid, lod):
         sql = """
         select
             pc_compress(
-                pc_patchtransform(
+                pc_setpcid(
                     pc_union(
                         pc_filterbetween(
                             pc_range({0}, {4}, {5}), 'Z', {6}, {7})
@@ -264,7 +265,7 @@ def sql_query(session, box, schema_pcid, lod):
         sql = """
         select
             pc_compress(
-                pc_patchtransform(
+                pc_setpcid(
                     pc_union(
                         pc_filterbetween(
                             pc_range({0}, {4}, {5}), 'Z', {6}, {7} )

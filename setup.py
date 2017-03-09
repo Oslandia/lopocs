@@ -19,7 +19,7 @@ requirements = (
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
-    'gitpython'
+    'click'
 )
 
 dev_requirements = (
@@ -74,11 +74,15 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     packages=find_packages(),
+    include_package_data=True,
     test_suite='tests',
     install_requires=requirements,
     extras_require={
         'dev': dev_requirements,
         'prod': prod_requirements,
         'doc': doc_requirements
+    },
+    entry_points={
+        'console_scripts': ['lopocs = lopocs.cli:cli'],
     }
 )
