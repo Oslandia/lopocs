@@ -1,5 +1,10 @@
+node_modules/
 lopocs.egg-info/
 dist/
 venv/
 conf/lopocs.uwsgi.yml
 conf/lopocs.yml
+outdir
+*.las
+*.pyc
+*.e57

@@ -58,14 +58,8 @@ if __name__ == '__main__':
     bbox_str = '_'.join(str(e) for e in bbox)
 
     if args.t == "greyhound":
-        h = greyhound.build_hierarchy_from_pg(lod_max, bbox, lod_min)
-
-        name = ("{0}_{1}_{2}_{3:.3f}_{4:.3f}_{5:.3f}_{6:.3f}_{7:.3f}_"
-                "{8:.3f}.hcy"
-                .format(ymlconf_db['PG_NAME'], lod_min, lod_max, bbox[0],
-                        bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]))
-
-        path = os.path.join(args.outdir, name)
+        h = greyhound.build_hierarchy_from_pg_mp(lod_max, bbox, lod_min)
+        path = os.path.join(args.outdir, "potree.hcy")
         f = open(path, 'w')
         f.write(json.dumps(h))
         f.close()

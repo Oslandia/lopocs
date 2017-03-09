@@ -12,23 +12,19 @@ from .database import Session
 
 GEOMETRIC_ERROR_DEFAULT = 2000
 
-# -----------------------------------------------------------------------------
-# classes
-# -----------------------------------------------------------------------------
+
 class ThreeDTilesInfo(object):
 
-    def run(self):
+    def run(self, args):
+        session = Session(args['table'], args['column'])
         # bounding box
-        if (Config.BB):
-            box = Config.BB
-        else:
-            box = Session.boundingbox()
+        box = session.boundingbox
 
         # number of points for the first patch
-        npoints = Session.approx_row_count() * Session.patch_size()
+        npoints = session.approx_row_count * session.patch_size
 
         # srs
-        srs = Session.srs()
+        srs = session.srs
 
         # build json
         info = json.dumps({
@@ -39,7 +35,6 @@ class ThreeDTilesInfo(object):
 
         # build the flask response
         resp = Response(info)
-        resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'text/plain'
 
         return resp
@@ -48,15 +43,14 @@ class ThreeDTilesInfo(object):
 class ThreeDTilesRead(object):
 
     def run(self, args):
+
+        session = Session(args['table'], args.get('column', 'pa'))
         offset = utils.list_from_str(args['offsets'])
-        schema_pcid = Config.POTREE_SCH_PCID_SCALE_01
         scale = args['scale']
-        if scale == 0.01:
-            schema_pcid = Config.POTREE_SCH_PCID_SCALE_001
         box = utils.list_from_str(args['bounds'])
         lod = args['lod']
 
-        [tile, npoints] = get_points(box, lod, offset, schema_pcid, scale)
+        [tile, npoints] = get_points(session, box, lod, offset, session.output_pcid(args['scale']), scale)
 
         if Config.DEBUG:
             tile.sync()
@@ -64,7 +58,6 @@ class ThreeDTilesRead(object):
 
         # build the flask response
         resp = Response(tile.to_array().tostring())
-        resp.headers['Access-Control-Allow-Origin'] = '*'
         resp.headers['Content-Type'] = 'application/octet-stream'
 
         return resp
@@ -73,12 +66,12 @@ class ThreeDTilesRead(object):
 # -----------------------------------------------------------------------------
 # utility functions specific 3dtiles
 # -----------------------------------------------------------------------------
-def get_points(box, lod, offset, schema_pcid, scale):
-    sql = sql_query(box, schema_pcid, lod)
+def get_points(session, box, lod, offset, schema_pcid, scale):
+    sql = sql_query(session, box, schema_pcid, lod)
     if Config.DEBUG:
         print(sql)
 
-    pcpatch_wkb = Session.query_aslist(sql)[0]
+    pcpatch_wkb = session.query(sql)[0][0]
     npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
 
     # extract data
@@ -87,10 +80,9 @@ def get_points(box, lod, offset, schema_pcid, scale):
     pdt = np.dtype([('X', '<f4'), ('Y', '<f4'), ('Z', '<f4')])
     cdt = np.dtype([('Red', 'u1'), ('Green', 'u1'), ('Blue', 'u1')])
 
-
     features = []
     for i in range(0, npoints):
-        point = decompressed_str[itemsize*i:itemsize*(i+1)]
+        point = decompressed_str[itemsize * i:itemsize * (i + 1)]
         x = point[0:4]
         y = point[4:8]
         z = point[8:12]
@@ -132,7 +124,7 @@ def get_points(box, lod, offset, schema_pcid, scale):
     return [tile, npoints]
 
 
-def sql_query(box, schema_pcid, lod):
+def sql_query(session, box, schema_pcid, lod):
     poly = utils.boundingbox_to_polygon(box)
 
     # retrieve the number of points to select in a pcpatch
@@ -165,9 +157,9 @@ def sql_query(box, schema_pcid, lod):
                "(select {0} from {1} "
                "where pc_intersects({0}, st_geomfromtext('polygon (("
                "{2}))',{3})) order by morton {8})_;"
-               .format(Session.column, Session.table,
-                       poly, Session.srsid(), range_min, range_max,
-                       box[2]-0.1, box[5]+0.1, sql_limit,
+               .format(session.column, session.table,
+                       poly, session.srsid, range_min, range_max,
+                       box[2] - 0.1, box[5] + 0.1, sql_limit,
                        schema_pcid))
     else:
         sql = ("select pc_compress(pc_setpcid(pc_union("
@@ -175,15 +167,17 @@ def sql_query(box, schema_pcid, lod):
                "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), {9}), 'laz') from "
                "(select {0} from {1} where pc_intersects({0}, "
                "st_geomfromtext('polygon (({2}))',{3})) {8})_;"
-               .format(Session.column, Session.table,
-                       poly, Session.srsid(), range_min, range_max,
+               .format(session.column, session.table,
+                       poly, session.srsid, range_min, range_max,
                        box[2], box[5], sql_limit,
                        schema_pcid))
 
     return sql
 
 
-def build_hierarchy_from_pg(baseurl, lod_max, bbox, lod):
+def build_hierarchy_from_pg(session, table, column, baseurl, lod_max, bbox, lod):
+    pcid = session.output_pcid(0.1)  # arbitrary chosen
+
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
     tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT # (lod_max+2)*20 - (lod+1)*20
@@ -199,10 +193,15 @@ def build_hierarchy_from_pg(baseurl, lod_max, bbox, lod):
     bounds = ("bounds=[{0},{1},{2},{3},{4},{5}]"
               .format(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]))
     offsets_str = "offsets=[{0},{1},{2}]".format(center_x, center_y, center_z)
-    scale = "scale={0}".format(0.01)
+    paramscale = "scale=0.1"
+    table = "table={}".format(table)
+    column = "column={}".format(column)
 
     base_url = "{0}/3dtiles/read.pnts".format(baseurl)
-    url = "{0}?{1}&{2}&{3}&{4}".format(base_url, lod_str, bounds, offsets_str, scale)
+    url = (
+        "{0}?{1}&{2}&{3}&{4}&{5}&{6}"
+        .format(base_url, lod_str, bounds, offsets_str, paramscale, table, column)
+    )
 
     root = {}
     root["refine"] = "add"
@@ -213,7 +212,7 @@ def build_hierarchy_from_pg(baseurl, lod_max, bbox, lod):
     lod = 1
     children_list = []
     for bb in split_bbox(bbox, lod):
-        json_children = children(baseurl, lod_max, offsets, bb, lod)
+        json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid)
         if len(json_children):
             children_list.append(json_children)
 
@@ -233,7 +232,7 @@ def build_children_section(baseurl, offsets, bbox, err, lod):
     bounds = ("bounds=[{0},{1},{2},{3},{4},{5}]"
               .format(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]))
     offsets_str = "offsets=[{0},{1},{2}]".format(offsets[0], offsets[1], offsets[2])
-    scale = "scale={0}".format(0.01)
+    scale = "scale=0.1"
 
     baseurl = "{0}/3dtiles/read.pnts".format(baseurl)
     url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod, bounds, offsets_str, scale)
@@ -254,7 +253,7 @@ def split_bbox(bbox, lod):
     height = bbox[5] - bbox[2]
 
     up = bbox[5]
-    middle = up - height/2
+    middle = up - height / 2
     down = bbox[2]
 
     x = bbox[0]
@@ -273,11 +272,11 @@ def split_bbox(bbox, lod):
             bbox_sed, bbox_seu]
 
 
-def children(baseurl, lod_max, offsets, bbox, lod):
+def children(session, baseurl, lod_max, offsets, bbox, lod, pcid):
 
     # run sql
-    sql = sql_query(bbox, Config.POTREE_SCH_PCID_SCALE_001, lod)
-    pcpatch_wkb = Session.query_aslist(sql)[0]
+    sql = sql_query(session, bbox, pcid, lod)
+    pcpatch_wkb = session.query(sql)[0][0]
 
     json_me = {}
     if lod <= lod_max and pcpatch_wkb:
@@ -291,7 +290,7 @@ def children(baseurl, lod_max, offsets, bbox, lod):
         children_list = []
         if lod <= lod_max:
             for bb in split_bbox(bbox, lod):
-                json_children = children(baseurl, lod_max, offsets, bb, lod)
+                json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid)
 
                 if len(json_children):
                     children_list.append(json_children)

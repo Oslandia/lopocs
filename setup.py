@@ -5,20 +5,21 @@ from setuptools import setup, find_packages
 import subprocess
 
 GDAL_VERSION = subprocess.check_output(['gdal-config', '--version']).strip().decode()
-GDAL_VERSION, GDAL_REVISION = GDAL_VERSION[:GDAL_VERSION.rfind('.')].split('.')
-GDAL_MIN = '{0}.{1}'.format(GDAL_VERSION, GDAL_REVISION)
-GDAL_MAX = '{0}.{1}'.format(GDAL_VERSION, int(GDAL_REVISION)+1)
+GDAL_VERSION, GDAL_REVISION_MAJOR, GDAL_REVISION_MINOR = GDAL_VERSION.split('.')
+GDAL_MIN = '{0}.{1}.{2}'.format(GDAL_VERSION, GDAL_REVISION_MAJOR, GDAL_REVISION_MINOR)
+GDAL_MAX = '{0}.{1}.{2}'.format(GDAL_VERSION, GDAL_REVISION_MAJOR, int(GDAL_REVISION_MINOR) + 1)
 
 here = os.path.abspath(os.path.dirname(__file__))
 
 requirements = (
-    'flask==0.10.1',
-    'flask-restplus==0.9.2',
-    'psycopg2==2.6.1',
+    'flask>=0.12',
+    'flask-restplus==0.10.0',
+    'psycopg2>=2.6.2',
     'pyyaml',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
+    'gitpython'
 )
 
 dev_requirements = (
