@@ -50,7 +50,6 @@ $ virtualenv -p /usr/bin/python3 venv
 $ . venv/bin/activate
 (venv)$ pip install --upgrade pip
 (venv)$ pip install -e .
-(venv)$ pip install -e "git+https://github.com/hobu/laz-perf#egg=lazperf&subdirectory=python"
 ```
 
 If you want to run unit tests:

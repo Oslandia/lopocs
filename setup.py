@@ -19,7 +19,8 @@ requirements = (
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
-    'click'
+    'click',
+    'lazperf==0.0.9'
 )
 
 dev_requirements = (
