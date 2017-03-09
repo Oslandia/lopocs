@@ -6,7 +6,7 @@ import os
 class Config(object):
 
     DEPTH = 6
-    CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache/lopocs")
+    CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "lopocs")
     ROOT_HCY = None
     MAX_PATCHS_PER_QUERY = None
     MAX_POINTS_PER_PATCH = None

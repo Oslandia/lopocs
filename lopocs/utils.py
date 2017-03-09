@@ -13,7 +13,8 @@ from .conf import Config
 # -----------------------------------------------------------------------------
 def write_in_cache(d, filename):
     path = os.path.join(Config.CACHE_DIR, filename)
-
+    if not os.path.exists(Config.CACHE_DIR):
+        os.mkdir(Config.CACHE_DIR)
     f = open(path, 'w')
     f.write(json.dumps(d))
     f.close()
