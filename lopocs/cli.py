@@ -73,7 +73,7 @@ def load(filename, table, column, work_dir, server_url):
     basename = filename.stem
     basedir = filename.parent
 
-    pending('Create metadata table')
+    pending('Creating metadata table')
     Session.create_pointcloud_lopocs_table()
     ok()
 
