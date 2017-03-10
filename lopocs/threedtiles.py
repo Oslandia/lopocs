@@ -3,7 +3,7 @@ import json
 import numpy as np
 import py3dtiles
 import struct
-from flask import Response
+from flask import make_response
 
 from . import utils
 from .greyhound import decompress
@@ -13,59 +13,45 @@ from .database import Session
 GEOMETRIC_ERROR_DEFAULT = 2000
 
 
-class ThreeDTilesInfo(object):
+def ThreeDTilesInfo(table, column):
 
-    def run(self, args):
-        session = Session(args['table'], args['column'])
-        # bounding box
-        box = session.boundingbox
+    session = Session(table, column)
+    # bounding box
+    box = session.boundingbox
 
-        # number of points for the first patch
-        npoints = session.approx_row_count * session.patch_size
+    # number of points for the first patch
+    npoints = session.approx_row_count * session.patch_size
 
-        # srs
-        srs = session.srs
+    # srs
+    srs = session.srs
 
-        # build json
-        info = json.dumps({
-            "bounds": [box['xmin'], box['ymin'], box['zmin'],
-                       box['xmax'], box['ymax'], box['zmax']],
-            "numPoints": npoints,
-            "srs": srs}, default=utils.decimal_default)
-
-        # build the flask response
-        resp = Response(info)
-        resp.headers['Content-Type'] = 'text/plain'
-
-        return resp
+    # build json
+    return {
+        "bounds": [box['xmin'], box['ymin'], box['zmin'],
+                   box['xmax'], box['ymax'], box['zmax']],
+        "numPoints": npoints,
+        "srs": srs
+    }
 
 
-class ThreeDTilesRead(object):
+def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
 
-    def run(self, args):
+    session = Session(table, column)
+    offset = utils.list_from_str(offsets)
+    box = utils.list_from_str(bounds)
 
-        session = Session(args['table'], args.get('column', 'pa'))
-        offset = utils.list_from_str(args['offsets'])
-        scale = args['scale']
-        box = utils.list_from_str(args['bounds'])
-        lod = args['lod']
+    [tile, npoints] = get_points(session, box, lod, offset, session.output_pcid(scale), scale)
 
-        [tile, npoints] = get_points(session, box, lod, offset, session.output_pcid(args['scale']), scale)
+    if Config.DEBUG:
+        tile.sync()
+        print("NPOINTS: ", npoints)
 
-        if Config.DEBUG:
-            tile.sync()
-            print("NPOINTS: ", npoints)
-
-        # build the flask response
-        resp = Response(tile.to_array().tostring())
-        resp.headers['Content-Type'] = 'application/octet-stream'
-
-        return resp
+    # build flask response
+    response = make_response(tile.to_array().tostring())
+    response.headers['content-type'] = 'application/octet-stream'
+    return response
 
 
-# -----------------------------------------------------------------------------
-# utility functions specific 3dtiles
-# -----------------------------------------------------------------------------
 def get_points(session, box, lod, offset, schema_pcid, scale):
     sql = sql_query(session, box, schema_pcid, lod)
     if Config.DEBUG:

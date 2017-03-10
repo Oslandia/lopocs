@@ -3,13 +3,13 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Response
+from flask import make_response
 import numpy
 from lazperf import buildNumpyDescription, Decompressor
 
 from .database import Session
 from .utils import (
-    decimal_default, list_from_str, read_in_cache,
+    list_from_str, read_in_cache,
     write_in_cache, Schema, Dimension, boundingbox_to_polygon,
     npoints_from_wkb_pcpatch, hexdata_from_wkb_pcpatch, hexa_signed_int32
 )
@@ -19,21 +19,18 @@ from .stats import Stats
 LOADER_GREYHOUND_MIN_DEPTH = 8
 
 
-def GreyhoundInfo(args):
+def GreyhoundInfo(table, column):
     # invoke a new db session
-    session = Session(args['table'], args['column'])
+    session = Session(table, column)
     box = session.boundingbox
 
     # number of points for the first patch
     npoints = session.approx_row_count * session.patch_size
 
-    # srs
-    srs = session.srs
-
     # build the greyhound schema
     schema_json = GreyhoundInfoSchema().json()
 
-    info = json.dumps({
+    return {
         "baseDepth": 0,
         "bounds": [box['xmin'], box['ymin'], box['zmin'],
                    box['xmax'], box['ymax'], box['zmax']],
@@ -41,32 +38,26 @@ def GreyhoundInfo(args):
                              box['xmax'], box['ymax'], box['zmax']],
         "numPoints": npoints,
         "schema": schema_json,
-        "srs": srs,
+        "srs": session.srs,
         "type": "octree"
-    }, default=decimal_default)
-
-    # build the flask response
-    resp = Response(info)
-    resp.headers['Content-Type'] = 'text/plain'
-
-    return resp
+    }
 
 
-def GreyhoundRead(args):
+def GreyhoundRead(table, column, offset, bounds, depthEnd, scale):
 
-    session = Session(args['table'], args.get('column', 'pa'))
+    session = Session(table, column)
 
     # prepare parameters
-    offset = list_from_str(args['offset'])
-    box = list_from_str(args['bounds'])
-    lod = args['depthEnd'] - LOADER_GREYHOUND_MIN_DEPTH - 1
+    offset = list_from_str(offset)
+    box = list_from_str(bounds)
+    lod = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
 
     # get points in database
     if Config.STATS:
         t0 = int(round(time.time() * 1000))
 
     [read, npoints] = get_points(
-        session, box, offset, session.output_pcid(args['scale']), lod
+        session, box, offset, session.output_pcid(scale), lod
     )
 
     if Config.STATS:
@@ -81,23 +72,22 @@ def GreyhoundRead(args):
         print("Points/sec: ", stats['rate_sec'])
 
     # build flask response
-    resp = Response(read)
-    resp.headers['Content-Type'] = 'application/octet-stream'
+    response = make_response(read)
+    response.headers['content-type'] = 'application/octet-stream'
+    return response
 
-    return resp
 
+def GreyhoundHierarchy(table, column, offset, bounds, depthBegin, depthEnd, scale):
 
-def GreyhoundHierarchy(args):
+    session = Session(table, column)
 
-    session = Session(args['table'], args.get('column', 'pa'))
+    lod_min = depthBegin - LOADER_GREYHOUND_MIN_DEPTH
 
-    lod_min = args['depthBegin'] - LOADER_GREYHOUND_MIN_DEPTH
-
-    lod_max = args['depthEnd'] - LOADER_GREYHOUND_MIN_DEPTH - 1
+    lod_max = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
     if lod_max > (Config.DEPTH - 1):
         lod_max = Config.DEPTH - 1
 
-    bbox = list_from_str(args['bounds'])
+    bbox = list_from_str(bounds)
 
     if lod_min == 0 and Config.ROOT_HCY:
         filename = Config.ROOT_HCY
@@ -111,20 +101,15 @@ def GreyhoundHierarchy(args):
         print("hierarchy file: {0}".format(filename))
 
     if cached_hcy:
-        resp = Response(json.dumps(cached_hcy))
+        resp = cached_hcy
     else:
         new_hcy = build_hierarchy_from_pg(session, lod_min, lod_max, bbox)
         write_in_cache(new_hcy, filename)
-        resp = Response(json.dumps(new_hcy))
-
-    resp.headers['Content-Type'] = 'text/plain'
+        resp = new_hcy
 
     return resp
 
 
-# -----------------------------------------------------------------------------
-# schema
-# -----------------------------------------------------------------------------
 class GreyhoundInfoSchema(Schema):
 
     def __init__(self):
