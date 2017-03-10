@@ -227,19 +227,20 @@ class Session():
                         select max(pcid) + 1 as pcid
                         from pointcloud_formats
                     )
-                    INSERT INTO pointcloud_formats
-                    SELECT pcid, %s, %s from tmp
+                    insert into pointcloud_formats
+                    select pcid, %s, %s from tmp
                     returning pcid
                 """, (srid, pcschema.format(**locals()))
             )
 
         pcid = res[0][0]
 
-        # insert new entry in pointcloud_lopocs
+        # update entries in pointcloud_lopocs
         self.execute("""
-            INSERT INTO pointcloud_lopocs (tablename, pcid, scale, bbox)
-            VALUES (%s, %s, %s, %s)
-        """, (self.table, pcid, scale, fullbbox))
+            delete from pointcloud_lopocs where tablename = %s and pcid = %s;
+            insert into pointcloud_lopocs (tablename, pcid, scale, bbox)
+            values (%s, %s, %s, %s)
+        """, (self.table, pcid, self.table, pcid, scale, fullbbox))
 
         # fill cache
         self.cache_pcid[(table, scale)] = pcid

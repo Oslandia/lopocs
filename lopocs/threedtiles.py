@@ -180,12 +180,12 @@ def build_hierarchy_from_pg(session, table, column, baseurl, lod_max, bbox, lod)
 
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
-    tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT # (lod_max+2)*20 - (lod+1)*20
+    tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT  # (lod_max+2)*20 - (lod+1)*20
 
     bvol = {}
-    center_x = bbox[0] + (bbox[3] - bbox[0])/2
-    center_y = bbox[1] + (bbox[4] - bbox[1])/2
-    center_z = bbox[2] + (bbox[5] - bbox[2])/2
+    center_x = bbox[0] + (bbox[3] - bbox[0]) / 2
+    center_y = bbox[1] + (bbox[4] - bbox[1]) / 2
+    center_z = bbox[2] + (bbox[5] - bbox[2]) / 2
     offsets = [center_x, center_y, center_z]
     bvol["sphere"] = [center_x, center_y, center_z, 2000]
 
