@@ -10,7 +10,7 @@ from lazperf import buildNumpyDescription, Decompressor
 from .database import Session
 from .utils import (
     list_from_str, read_in_cache,
-    write_in_cache, Schema, Dimension, boundingbox_to_polygon,
+    write_in_cache, boundingbox_to_polygon,
     npoints_from_wkb_pcpatch, hexdata_from_wkb_pcpatch, hexa_signed_int32
 )
 from .conf import Config
@@ -56,12 +56,10 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
     if offset is None and scale is None and bounds is None:
         # normalization request from potree gives no bounds, no scale and
         # no offset, only a schema
-        found = False
         for output in session.lopocstable.outputs:
             if schema == sorted(output['point_schema'], key=lambda x: x['name']):
                 pcid = output['pcid']
-                found = True
-        if not found:
+        if not pcid:
             obj = session.lopocstable.outputs[0]
             pcid = session.add_output_schema(
                 session.table, session.column,
@@ -73,17 +71,14 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
         offsets = [round(off, 2) for off in offset]
         # check if schema, scale and offset exists in our db
         requested = [scales, offsets, sorted(schema, key=lambda x: x['name'])]
-
         pcid = None
-        found = False
 
         for output in session.lopocstable.outputs:
             oschema = sorted(output['point_schema'], key=lambda x: x['name'])
             if requested == [output['scales'], output['offsets'], oschema]:
                 pcid = output['pcid']
-                found = True
 
-        if not found:
+        if not pcid:
             # insert new schem
             pcid = session.add_output_schema(
                 session.table, session.column,
@@ -181,36 +176,6 @@ def GreyhoundHierarchy(table, column, bounds, depthBegin, depthEnd, scale, offse
         resp = new_hcy
 
     return resp
-
-
-class GreyhoundInfoSchema(Schema):
-
-    def __init__(self):
-        Schema.__init__(self)
-
-        self.dims.append(Dimension("X", "floating", 8))
-        self.dims.append(Dimension("Y", "floating", 8))
-        self.dims.append(Dimension("Z", "floating", 8))
-        self.dims.append(Dimension("Intensity", "unsigned", 2))
-        self.dims.append(Dimension("Classification", "unsigned", 1))
-        self.dims.append(Dimension("Red", "unsigned", 2))
-        self.dims.append(Dimension("Green", "unsigned", 2))
-        self.dims.append(Dimension("Blue", "unsigned", 2))
-
-
-class GreyhoundReadSchema(Schema):
-
-    def __init__(self):
-        Schema.__init__(self)
-
-        self.dims.append(Dimension("X", "signed", 4))
-        self.dims.append(Dimension("Y", "signed", 4))
-        self.dims.append(Dimension("Z", "signed", 4))
-        self.dims.append(Dimension("Intensity", "unsigned", 2))
-        self.dims.append(Dimension("Classification", "unsigned", 1))
-        self.dims.append(Dimension("Red", "unsigned", 2))
-        self.dims.append(Dimension("Green", "unsigned", 2))
-        self.dims.append(Dimension("Blue", "unsigned", 2))
 
 
 def sql_hierarchy(session, box, lod):

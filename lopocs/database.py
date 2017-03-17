@@ -14,7 +14,7 @@ from .potreeschema import create_pointcloud_schema
 psycopg2.extensions.register_adapter(dict, psycopg2.extras.Json)
 
 
-LOPOCS_TABLE_QUERY = """
+LOPOCS_TABLES_QUERY = """
 create table if not exists pointcloud_lopocs (
     id serial primary key
     , schematable varchar
@@ -302,34 +302,19 @@ class Session():
 
     @classmethod
     def create_pointcloud_lopocs_table(cls):
-        """
-        Create a metadata table that stores a link between an output schema
-        for a given table (to be used by the couple greyhound/potree)
-        """
-        cls.execute(LOPOCS_TABLE_QUERY)
-
-    @property
-    def get_patch_scale_offset(self):
-        '''Get the scale and offset used in stored patches'''
-        res = self.query("""
-            select scales_offsets from pointcloud_lopocs_outputs p
-            join (select pc_pcid({}) as pcid from {} limit 1) t
-                on t.pcid = p.pcid
-            """.format(self.column, self.table)
-        )
-        if not res:
-            raise LopocsException(
-                'Integrity error between patch table and pointcloud_lopocs_outputs'
-            )
-        return res[0][0]
+        '''
+        Create some meta tables that stores informations used by lopocs to
+        stream patches in various formats
+        '''
+        cls.execute(LOPOCS_TABLES_QUERY)
 
     @classmethod
     def update_metadata(cls, table, column, srid, scale_x, scale_y, scale_z,
                         offset_x, offset_y, offset_z):
-        """
+        '''
         Add an entry to the lopocs metadata tables to use.
         To be used after a fresh pc table creation.
-        """
+        '''
         pcid = cls.query("""
             select pcid from pointcloud_columns
             where "schema" = %s and "table" = %s and "column" = %s
