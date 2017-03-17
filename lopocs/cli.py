@@ -6,8 +6,7 @@ import re
 import sys
 import shlex
 import json
-import threading
-import webbrowser
+from zipfile import ZipFile
 from datetime import datetime
 from pathlib import Path
 from subprocess import check_call, check_output, CalledProcessError, DEVNULL
@@ -15,11 +14,13 @@ from subprocess import check_call, check_output, CalledProcessError, DEVNULL
 import click
 import requests
 from osgeo.osr import SpatialReference
+from flask_cors import CORS
 
 from lopocs import __version__
 from lopocs import create_app, greyhound, threedtiles
 from lopocs.database import Session
 from lopocs.potreeschema import potree_schema
+from lopocs.potreeschema import potree_page
 
 # intialize flask application
 app = create_app()
@@ -49,6 +50,23 @@ def ok(mess=None):
 
 def ko():
     click.secho('ko', fg='red')
+
+
+def download(label, url, dest):
+    '''
+    download url using requests and a progressbar
+    '''
+    r = requests.get(url, stream=True)
+    length = int(r.headers['content-length'])
+
+    chunk_size = 512
+    iter_size = 0
+    with io.open(dest, 'wb') as fd:
+        with click.progressbar(length=length, label=label) as bar:
+            for chunk in r.iter_content(chunk_size):
+                fd.write(chunk)
+                iter_size += chunk_size
+                bar.update(chunk_size)
 
 
 def print_version(ctx, param, value):
@@ -253,30 +271,38 @@ def _load(filename, table, column, work_dir, server_url):
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 def demo(sample, work_dir, server_url):
     '''
-    Download sample lidar data, load it into your and visualize in potree viewer !
+    download sample lidar data, load it into your and visualize in potree viewer
     '''
     filepath = Path(samples[sample])
     dest = os.path.join(work_dir, filepath.name)
 
     if not os.path.exists(dest):
-        r = requests.get(samples[sample], stream=True)
-        length = int(r.headers['content-length'])
-
-        chunk_size = 512
-        iter_size = 0
-
-        with io.open(dest, 'wb') as fd:
-            with click.progressbar(length=length, label='Downloading sample file') as bar:
-                for chunk in r.iter_content(chunk_size):
-                    fd.write(chunk)
-                    iter_size += chunk_size
-                    bar.update(chunk_size)
+        download('Downloading sample', samples[sample], dest)
 
     # now load data
     _load(dest, sample, 'points', work_dir, server_url)
-    # open tab to the API
-    threading.Timer(1.5, lambda: webbrowser.open_new_tab(server_url)).start()
-    # run application
+
+    # get potree build
+    potree = os.path.join(work_dir, 'potree')
+    potreezip = os.path.join(work_dir, 'potree.zip')
+    if not os.path.exists(potree):
+        download('Getting potree code', 'http://3d.oslandia.com/potree.zip', potreezip)
+        # unzipping content
+        with ZipFile(potreezip) as myzip:
+            myzip.extractall(path=work_dir)
+        ok()
+
+    pending('Creating a demo page : {}.html'.format(sample))
+    resource = 'public.{}.points'.format(sample)
+    sample_page = os.path.join(work_dir, '{}.html'.format(sample))
+    server_url = server_url.replace('http://', '')
+    with io.open(sample_page, 'wb') as html:
+        html.write(potree_page.format(resource=resource, server_url=server_url).encode())
+
+    click.echo('Now open the file {}.html in your favorite browser'.format(sample))
+    # run the lopocs server
+    # add cors headers for testing
+    CORS(app)
     app.run(debug=False)
 
 
