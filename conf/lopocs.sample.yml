@@ -1,11 +1,8 @@
 flask:
-    DEBUG: True
+    DEBUG: False
     PG_HOST: localhost
     PG_NAME: db
     PG_PORT: 5432
     PG_USER: user
-    PG_PASSWORD:
-    USE_MORTON: True
+    PG_PASSWORD: ****
     CACHE_DIR: /home/user/.cache/lopocs
-    STATS: False
-    STATS_SERVER_PORT: 6379
