@@ -1,77 +1,126 @@
 # -*- coding: utf-8 -*-
-pcschema = """<?xml version="1.0" encoding="UTF-8"?>
-<pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/1.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-<pc:dimension>
-<pc:position>1</pc:position>
-<pc:size>4</pc:size>
-<pc:description>X coordinate</pc:description>
-<pc:name>X</pc:name>
-<pc:interpretation>int32_t</pc:interpretation>
-<pc:scale>{scale}</pc:scale>
-<pc:offset>{x_offset}</pc:offset>
-<pc:active>true</pc:active>
+
+potree_schema = [
+    {
+        "name": "X",
+        "size": 4,
+        "type": "signed"
+    },
+    {
+        "name": "Y",
+        "size": 4,
+        "type": "signed"
+    },
+    {
+        "name": "Z",
+        "size": 4,
+        "type": "signed"
+    },
+    {
+        "name": "Intensity",
+        "size": 2,
+        "type": "unsigned"
+    },
+    {
+        "name": "Classification",
+        "size": 1,
+        "type": "unsigned"
+    },
+    {
+        "name": "Red",
+        "size": 2,
+        "type": "unsigned"
+    },
+    {
+        "name": "Green",
+        "size": 2,
+        "type": "unsigned"
+    },
+    {
+        "name": "Blue",
+        "size": 2,
+        "type": "unsigned"
+    }
+]
+
+ctypes_map = {
+    ('unsigned', 1): 'uint8_t',
+    ('unsigned', 2): 'uint16_t',
+    ('unsigned', 4): 'uint32_t',
+    ('signed', 2): 'int16_t',
+    ('signed', 4): 'int32_t',
+    ('floating', 4): 'float',
+}
+
+dim_skeleton_xyz = """<pc:dimension>
+    <pc:position>{pos}</pc:position>
+    <pc:size>{size}</pc:size>
+    <pc:description>{name}</pc:description>
+    <pc:name>{name}</pc:name>
+    <pc:interpretation>{ctype}</pc:interpretation>
+    <pc:scale>{scale}</pc:scale>
+    <pc:offset>{offset}</pc:offset>
+    <pc:active>true</pc:active>
 </pc:dimension>
-<pc:dimension>
-<pc:position>2</pc:position>
-<pc:size>4</pc:size>
-<pc:description>Y coordinate</pc:description>
-<pc:name>Y</pc:name>
-<pc:interpretation>int32_t</pc:interpretation>
-<pc:scale>{scale}</pc:scale>
-<pc:offset>{y_offset}</pc:offset>
-<pc:active>true</pc:active>
+"""
+
+dim_skeleton = """<pc:dimension>
+    <pc:position>{pos}</pc:position>
+    <pc:size>{size}</pc:size>
+    <pc:description>{name}</pc:description>
+    <pc:name>{name}</pc:name>
+    <pc:interpretation>{ctype}</pc:interpretation>
+    <pc:active>true</pc:active>
 </pc:dimension>
-<pc:dimension>
-<pc:position>3</pc:position>
-<pc:size>4</pc:size>
-<pc:description>Z coordinate</pc:description>
-<pc:name>Z</pc:name>
-<pc:interpretation>int32_t</pc:interpretation>
-<pc:scale>{scale}</pc:scale>
-<pc:offset>{z_offset}</pc:offset>
-<pc:active>true</pc:active>
-</pc:dimension>
-<pc:dimension>
-<pc:position>4</pc:position>
-<pc:size>2</pc:size>
-<pc:description>Representation of the pulse return magnitude</pc:description>
-<pc:name>Intensity</pc:name>
-<pc:interpretation>uint16_t</pc:interpretation>
-<pc:active>true</pc:active>
-</pc:dimension>
-<pc:dimension>
-<pc:position>5</pc:position>
-<pc:size>1</pc:size>
-<pc:description>ASPRS classification.  0 for no classification.</pc:description>
-<pc:name>Classification</pc:name>
-<pc:interpretation>uint8_t</pc:interpretation>
-<pc:active>true</pc:active>
-</pc:dimension>
-<pc:dimension>
-<pc:position>6</pc:position>
-<pc:size>2</pc:size>
-<pc:description>Red image channel value</pc:description>
-<pc:name>Red</pc:name>
-<pc:interpretation>uint16_t</pc:interpretation>
-<pc:active>true</pc:active>
-</pc:dimension>
-<pc:dimension>
-<pc:position>7</pc:position>
-<pc:size>2</pc:size>
-<pc:description>Green image channel value</pc:description>
-<pc:name>Green</pc:name>
-<pc:interpretation>uint16_t</pc:interpretation>
-<pc:active>true</pc:active>
-</pc:dimension>
-<pc:dimension>
-<pc:position>8</pc:position>
-<pc:size>2</pc:size>
-<pc:description>Blue image channel value</pc:description>
-<pc:name>Blue</pc:name>
-<pc:interpretation>uint16_t</pc:interpretation>
-<pc:active>true</pc:active>
-</pc:dimension>
+"""
+
+
+schema_skeleton = """<?xml version="1.0" encoding="UTF-8"?>
+<pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+{dims_xyz}
+{dims}
 <pc:metadata>
 <Metadata name="compression" type="string"/>{compression}</pc:metadata>
 <pc:orientation>point</pc:orientation>
 </pc:PointCloudSchema>"""
+
+
+def dim_arr_index(dim):
+    index = {'x': 0, 'y': 1, 'z': 2}
+    return index[dim['name'].lower()]
+
+
+def create_pointcloud_schema(dimensions, scales, offsets, compression='none'):
+    '''
+    Create a pointcloud schema corresponding with given parameters
+    Dimensions looks like :
+        [
+            {
+                "name": "X",
+                "size": 4,
+                "type": "signed"
+            },...
+        ]
+    :param scales: array of 3 scales for x, y, z
+    :param ofsets: array of 3 offset
+    '''
+    xyz_dims = [d for d in dimensions if d['name'].lower() in ('x', 'y', 'z')]
+    other_dims = [d for d in dimensions if d['name'].lower() not in ('x', 'y', 'z')]
+
+    pcschema = schema_skeleton.format(
+        compression=compression,
+        dims_xyz=''.join(dim_skeleton_xyz.format(
+            **dict(d,
+                   ctype=ctypes_map[(d['type'], d['size'])],
+                   scale=scales[dim_arr_index(d)],
+                   offset=offsets[dim_arr_index(d)],
+                   pos=dim_arr_index(d) + 1))
+            for d in xyz_dims
+        ),
+        dims=''.join(dim_skeleton.format(
+            **dict(d, ctype=ctypes_map[(d['type'], d['size'])], pos=pos))
+            for pos, d in enumerate(other_dims, start=4)
+        )
+    )
+
+    return pcschema

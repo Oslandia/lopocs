@@ -8,9 +8,17 @@ import decimal
 from .conf import Config
 
 
-# -----------------------------------------------------------------------------
-# functions
-# -----------------------------------------------------------------------------
+def greyhound_types(typ):
+    '''
+    https://github.com/hobu/greyhound/blob/master/doc/clientDevelopment.rst#schema
+    '''
+    if typ[0] == 'u':
+        return "unsigned"
+    elif typ in ('double', 'float'):
+        return "floating"
+    return "signed"
+
+
 def write_in_cache(d, filename):
     path = os.path.join(Config.CACHE_DIR, filename)
     if not os.path.exists(Config.CACHE_DIR):
@@ -30,6 +38,12 @@ def read_in_cache(filename):
     return d
 
 
+def iterable2pgarray(iterable):
+    """Convert a python iterable to a postgresql array
+    """
+    return '{' + ','.join([str(elem) for elem in iterable]) + '}'
+
+
 def decimal_default(obj):
     if isinstance(obj, decimal.Decimal):
         return float(obj)
@@ -41,11 +55,7 @@ def list_from_str(list_str):
     Transform a string ['[', '1', '.', '5', ',', '2', ',', '3', ']']
     to a list [1,2,3]
     """
-    list_str = list_str.replace('[', '')
-    list_str = list_str.replace(']', '')
-    l = [float(x) for x in list_str.split(',')]
-
-    return l
+    return [float(val) for val in list_str[1:-1].split(',')]
 
 
 def boundingbox_to_polygon(box):

@@ -22,13 +22,12 @@ LOADER_GREYHOUND_MIN_DEPTH = 8
 def GreyhoundInfo(table, column):
     # invoke a new db session
     session = Session(table, column)
-    box = session.boundingbox
 
+    box = session.lopocstable.bbox
+    # get object representing the stored patches format
+    stored_patches = session.lopocstable.filter_stored_output()
     # number of points for the first patch
     npoints = session.approx_row_count * session.patch_size
-
-    # build the greyhound schema
-    schema_json = GreyhoundInfoSchema().json()
 
     return {
         "baseDepth": 0,
@@ -37,28 +36,90 @@ def GreyhoundInfo(table, column):
         "boundsConforming": [box['xmin'], box['ymin'], box['zmin'],
                              box['xmax'], box['ymax'], box['zmax']],
         "numPoints": npoints,
-        "schema": schema_json,
+        "schema": stored_patches['point_schema'],
         "srs": session.srs,
-        "type": "octree"
+        "type": "octree",
+        "scale": stored_patches['scales'],
+        "offset": stored_patches['offsets']
     }
 
 
-def GreyhoundRead(table, column, offset, bounds, depthEnd, scale):
+def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depthEnd, schema):
 
     session = Session(table, column)
 
+    # we treat scales as list
+    scales = [scale] * 3
+    # convert string schema to a list of dict
+    schema = json.loads(schema)
+
+    if offset is None and scale is None and bounds is None:
+        # normalization request from potree gives no bounds, no scale and
+        # no offset, only a schema
+        found = False
+        for output in session.lopocstable.outputs:
+            if sorted(schema, key=lambda x: x['name']) == sorted(output['point_schema'], key=lambda x: x['name']):
+                pcid = output['pcid']
+                found = True
+        if not found:
+            obj = session.lopocstable.outputs[0]
+            pcid = session.add_output_schema(
+                session.table, session.column,
+                obj['scales'][0], obj['scales'][1], obj['scales'][2],
+                obj['offsets'][0], obj['offsets'][1], obj['offsets'][2],
+                session.lopocstable.srid, schema)
+    else:
+        offset = list_from_str(offset)
+        offsets = [round(off, 2) for off in offset]
+        # check if schema, scale and offset exists in our db
+        requested = [scales, offsets, schema]
+
+        pcid = None
+        found = False
+
+        for output in session.lopocstable.outputs:
+            if requested == [output['scales'], output['offsets'], output['point_schema']]:
+                pcid = output['pcid']
+                found = True
+
+        if not found:
+            # insert new schem
+            pcid = session.add_output_schema(
+                session.table, session.column,
+                scales[0], scales[1], scales[2],
+                offsets[0], offsets[1], offsets[2],
+                session.lopocstable.srid, schema)
+
     # prepare parameters
-    offset = list_from_str(offset)
-    box = list_from_str(bounds)
-    lod = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
+    if not bounds and depth == 0:
+        bbox = [
+            session.boundingbox['xmin'],
+            session.boundingbox['ymin'],
+            session.boundingbox['zmin'],
+            session.boundingbox['xmax'],
+            session.boundingbox['ymax'],
+            session.boundingbox['zmax']
+        ]
+    else:
+        bbox = list_from_str(bounds)
+        # apply scale and offset to bbox for querying database
+        bbox[0] = bbox[0] * scales[0] + offset[0]
+        bbox[1] = bbox[1] * scales[1] + offset[1]
+        bbox[2] = bbox[2] * scales[2] + offset[2]
+        bbox[3] = bbox[3] * scales[0] + offset[0]
+        bbox[4] = bbox[4] * scales[1] + offset[1]
+        bbox[5] = bbox[5] * scales[2] + offset[2]
+
+    if depth is not None:
+        lod = 0
+    else:
+        lod = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
 
     # get points in database
     if Config.STATS:
         t0 = int(round(time.time() * 1000))
 
-    [read, npoints] = get_points(
-        session, box, offset, session.output_pcid(scale), lod
-    )
+    [read, npoints] = get_points(session, bbox, pcid, lod)
 
     if Config.STATS:
         t1 = int(round(time.time() * 1000))
@@ -77,7 +138,7 @@ def GreyhoundRead(table, column, offset, bounds, depthEnd, scale):
     return response
 
 
-def GreyhoundHierarchy(table, column, offset, bounds, depthBegin, depthEnd, scale):
+def GreyhoundHierarchy(table, column, bounds, depthBegin, depthEnd, scale, offset):
 
     session = Session(table, column)
 
@@ -88,6 +149,16 @@ def GreyhoundHierarchy(table, column, offset, bounds, depthBegin, depthEnd, scal
         lod_max = Config.DEPTH - 1
 
     bbox = list_from_str(bounds)
+
+    if offset:
+        # apply scale and offset if needed
+        offset = list_from_str(offset)
+        bbox[0] = bbox[0] * scale + offset[0]
+        bbox[1] = bbox[1] * scale + offset[1]
+        bbox[2] = bbox[2] * scale + offset[2]
+        bbox[3] = bbox[3] * scale + offset[0]
+        bbox[4] = bbox[4] * scale + offset[1]
+        bbox[5] = bbox[5] * scale + offset[2]
 
     if lod_min == 0 and Config.ROOT_HCY:
         filename = Config.ROOT_HCY
@@ -103,6 +174,7 @@ def GreyhoundHierarchy(table, column, offset, bounds, depthBegin, depthEnd, scal
     if cached_hcy:
         resp = cached_hcy
     else:
+
         new_hcy = build_hierarchy_from_pg(session, lod_min, lod_max, bbox)
         write_in_cache(new_hcy, filename)
         resp = new_hcy
@@ -142,13 +214,17 @@ class GreyhoundReadSchema(Schema):
 
 def sql_hierarchy(session, box, lod):
     poly = boundingbox_to_polygon(box)
+
+    maxpp_patch = session.lopocstable.max_points_per_patch
+    maxpp_query = session.lopocstable.max_patches_per_query
+
     # retrieve the number of points to select in a pcpatch
     range_min = 0
     range_max = 1
 
-    if Config.MAX_POINTS_PER_PATCH:
+    if maxpp_patch:
         range_min = 0
-        range_max = Config.MAX_POINTS_PER_PATCH
+        range_max = maxpp_patch
     else:
         beg = 0
         for i in range(0, lod):
@@ -163,8 +239,8 @@ def sql_hierarchy(session, box, lod):
 
     # build the sql query
     sql_limit = ""
-    if session.max_patchs_per_query:
-        sql_limit = " limit {0} ".format(session.max_patchs_per_query)
+    if maxpp_query:
+        sql_limit = " limit {0} ".format(maxpp_query)
 
     if Config.USE_MORTON:
         sql = """
@@ -197,15 +273,18 @@ def sql_hierarchy(session, box, lod):
     return sql
 
 
-def sql_query(session, box, schema_pcid, lod):
+def get_points_query(session, box, schema_pcid, lod):
     poly = boundingbox_to_polygon(box)
+
     # retrieve the number of points to select in a pcpatch
     range_min = 0
     range_max = 1
 
-    if Config.MAX_POINTS_PER_PATCH:
+    maxppp = session.lopocstable.max_points_per_patch
+
+    if maxppp:
         range_min = 0
-        range_max = Config.MAX_POINTS_PER_PATCH
+        range_max = maxppp
     else:
         # adapted to midoc filter
         beg = 0
@@ -221,8 +300,9 @@ def sql_query(session, box, schema_pcid, lod):
 
     # build the sql query
     sql_limit = ""
-    if session.max_patchs_per_query:
-        sql_limit = " limit {0} ".format(session.max_patchs_per_query)
+    maxppq = session.lopocstable.max_patches_per_query
+    if maxppq:
+        sql_limit = " limit {0} ".format(maxppq)
 
     if Config.USE_MORTON:
         sql = """
@@ -270,18 +350,22 @@ def sql_query(session, box, schema_pcid, lod):
     return sql
 
 
-def get_points(session, box, offset, schema_pcid, lod):
+def get_points(session, box, schema_pcid, lod):
 
     npoints = 0
     hexbuffer = bytearray()
-    sql = sql_query(session, box, schema_pcid, lod)
+    sql = get_points_query(session, box, schema_pcid, lod)
 
     if Config.DEBUG:
         print(sql)
 
     try:
         pcpatch_wkb = session.query(sql)[0][0]
-        # to test output from pgpointcloud : decompress(points)
+        # to test output from pgpointcloud :
+
+        # get json schema representation
+        # schema = session.lopocstable.point_schema
+        # decompress(pcpatch_wkb, schema)
 
         # retrieve number of points in wkb pgpointcloud patch
         npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
@@ -324,6 +408,7 @@ def fake_hierarchy(begin, end, npatchs):
 
 def build_hierarchy_from_pg(session, lod, lod_max, bbox):
 
+    # pcid is needed to get max attributes
     sql = sql_hierarchy(session, bbox, lod)
     pcpatch_wkb = session.query(sql)[0][0]
 
@@ -451,7 +536,7 @@ def build_hierarchy_from_pg_single(session, lod, lod_max, bbox):
     return hierarchy
 
 
-def decompress(points):
+def decompress(points, schema):
     """
     'points' is a pcpatch in wkb
     """
@@ -462,7 +547,8 @@ def decompress(points):
     hexbuffer += hexa_signed_int32(npoints)
 
     # uncompress
-    s = json.dumps(GreyhoundReadSchema().json()).replace("\\", "")
+    s = json.dumps(schema).replace("\\", "")
+    # s = json.dumps(GreyhoundReadSchema().json()).replace("\\", "")
     dtype = buildNumpyDescription(json.loads(s))
 
     lazdata = bytes(hexbuffer)
@@ -471,17 +557,8 @@ def decompress(points):
     d = Decompressor(arr, s)
     output = numpy.zeros(npoints * dtype.itemsize, dtype=numpy.uint8)
     decompressed = d.decompress(output)
+    print('point size', dtype.itemsize)
+    print('X: ', decompressed['X'][0], 'Y: ', decompressed['Y'][0], 'Z: ', decompressed['Z'][0])
 
     decompressed_str = numpy.ndarray.tostring(decompressed)
-
-    # import struct
-    # for i in range(0, npoints):
-    #     point = decompressed_str[dtype.itemsize*i:dtype.itemsize*(i+1)]
-    #     x = point[0:4]
-    #     y = point[4:8]
-    #     z = point[8:12]
-    #     xd = struct.unpack("i", x)
-    #     yd = struct.unpack("i", y)
-    #     zd = struct.unpack("i", z)
-
     return [decompressed_str, dtype.itemsize]

@@ -7,10 +7,11 @@ extension.
 
 .. image:: docs/lopocs.png
     :align: center
-    :width: 400
+    :width: 400px
 
 .. image:: docs/itowns_montreal1_header.png
-    :width: 700
+    :align: center
+    :width: 700px
 
 |unix_build| |license|
 
@@ -102,8 +103,6 @@ Prepare your database to welcome point clouds data
 Fill the database with lopocs command line
 ------------------------------------------
 
-
-
 Test lopocs with docker
 =======================
 
@@ -132,7 +131,6 @@ directory.
 ### Saint Sulpice
 
 An example with St Sulpice point cloud (e57 format) coming from [here](http://www.libe57.org/data.html):
-
 
 To test if LOPoCS is well online:
 

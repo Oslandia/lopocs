@@ -43,12 +43,12 @@ class Sources(Resource):
     def get(self):
         """List available resources
         """
-        Session.table_list.cache_clear()
-        resp = [{
-            'table': table,
-            'column': column,
-            'srid': srid
-        } for (table, column), srid in Session.table_list().items()]
+        Session.clear_catalog()
+        Session.fill_catalog()
+        resp = [
+            values.asjson()
+            for key, values in Session.catalog.items()
+        ]
         return resp
 
 
@@ -77,11 +77,13 @@ class Info(Resource):
 
 
 ghd_read = reqparse.RequestParser()
-ghd_read.add_argument('depthBegin', type=int)
-ghd_read.add_argument('depthEnd', type=int)
-ghd_read.add_argument('bounds', type=str)
-ghd_read.add_argument('scale', type=float)
-ghd_read.add_argument('offset', type=str)
+ghd_read.add_argument('depthBegin', type=int, required=False)
+ghd_read.add_argument('depthEnd', type=int, required=False)
+ghd_read.add_argument('depth', type=int, required=False)
+ghd_read.add_argument('bounds', type=str, required=False)
+ghd_read.add_argument('scale', type=float, required=False)
+ghd_read.add_argument('offset', type=str, required=False)
+ghd_read.add_argument('schema', type=str, required=False)
 
 
 @ghd_ns.route("/<resource>/read")
@@ -91,21 +93,24 @@ class Read(Resource):
     def get(self, resource):
         table, column = validate_resource(resource)
         args = ghd_read.parse_args()
-        print('fuck', args.get('depthEnd', 5))
-        offset, bounds, depthEnd, scale = (
-            args.get('offset', 0),
-            args.get('bounds', ''),
-            args.get('depthEnd', 5),
-            args.get('scale', 0.1)
-        )
-        print(offset, bounds, depthEnd, scale)
-        return GreyhoundRead(table, column, offset, bounds, depthEnd, scale)
+        return GreyhoundRead(
+            table,
+            column,
+            args.get('offset'),
+            args.get('scale'),
+            args.get('bounds'),
+            args.get('depth'),
+            args.get('depthBegin'),
+            args.get('depthEnd'),
+            args.get('schema'))
 
 
 ghd_hierarchy = reqparse.RequestParser()
-ghd_hierarchy.add_argument('depthBegin', type=int, required=True)
-ghd_hierarchy.add_argument('depthEnd', type=int, required=True)
+ghd_hierarchy.add_argument('depthBegin', type=int)
+ghd_hierarchy.add_argument('depthEnd', type=int)
 ghd_hierarchy.add_argument('bounds', type=str, required=True)
+ghd_hierarchy.add_argument('scale', type=float)
+ghd_hierarchy.add_argument('offset', type=str)
 
 
 @ghd_ns.route("/<resource>/hierarchy")
@@ -115,14 +120,11 @@ class Hierarchy(Resource):
     def get(self, resource):
         table, column = validate_resource(resource)
         args = ghd_hierarchy.parse_args()
-        offset, bounds, depthBegin, depthEnd, scale = (
-            args.get('offset', 0),
-            args.get('bounds', ''),
-            args.get('depthBegin', 0),
-            args.get('depthEnd', 5),
-            args.get('scale', 0.1)
-        )
-        return GreyhoundHierarchy(table, column, offset, bounds, depthBegin, depthEnd, scale)
+        return GreyhoundHierarchy(
+            table, column,
+            args.get('bounds'),
+            args.get('depthBegin'), args.get('depthEnd'),
+            args.get('scale'), args.get('offset'))
 
 
 # 3Dtiles namespace
@@ -151,10 +153,8 @@ class ThreeDTilesReadRoute(Resource):
     def get(self, resource):
         table, column = validate_resource(resource)
         args = threedtiles_read.parse_args()
-        bounds, lod, offsets, scale = (
-            args.get('bounds', ''),
-            args.get('lod', 0),
-            args.get('offsets', 0),
-            args.get('scale', 0.1)
+        return ThreeDTilesRead(
+            table, column,
+            args.get('offsets'), args.get('scale'),
+            args.get('bounds'), args.get('lod')
         )
-        return ThreeDTilesRead(table, column, offsets, scale, bounds, lod)

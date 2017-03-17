@@ -13,13 +13,14 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 requirements = (
     'flask>=0.12',
-    'flask-restplus==0.10.0',
+    'flask-restplus==0.10.1',
     'psycopg2>=2.6.2',
     'pyyaml',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis',
     'py3dtiles',
     'click',
+    'requests',
     'lazperf==0.0.9'
 )
 

@@ -2,19 +2,32 @@
 # -*- coding: utf-8 -*-
 import io
 import os
+import re
 import sys
 import shlex
+import json
+import threading
+import webbrowser
 from datetime import datetime
 from pathlib import Path
-from subprocess import check_call, CalledProcessError, DEVNULL
+from subprocess import check_call, check_output, CalledProcessError, DEVNULL
 
 import click
+import requests
+from osgeo.osr import SpatialReference
+
 from lopocs import __version__
 from lopocs import create_app, greyhound, threedtiles
 from lopocs.database import Session
+from lopocs.potreeschema import potree_schema
 
 # intialize flask application
 app = create_app()
+
+samples = {
+    'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
+    'stsulpice': 'https://freefr.dl.sourceforge.net/project/e57-3d-imgfmt/E57Example-data/Trimble_StSulpice-Cloud-50mm.e57'
+}
 
 
 def fatal(message):
@@ -61,11 +74,16 @@ def serve():
 
 @click.option('--table', required=True, help='table name to store pointclouds, considered in public schema if no prefix provided')
 @click.option('--column', help="column name to store patches", default="points", type=str)
-@click.option('--work-dir', type=click.Path(exists=True), help="working directory where temporary files will be saved")
+@click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where temporary files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
 def load(filename, table, column, work_dir, server_url):
+    '''load pointclouds data using pdal and add metadata needed by lopocs'''
+    _load(filename, table, column, work_dir, server_url)
+
+
+def _load(filename, table, column, work_dir, server_url):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
     filename = Path(filename)
     work_dir = Path(work_dir)
@@ -82,43 +100,80 @@ def load(filename, table, column, work_dir, server_url):
         str(work_dir.resolve()),
         '{basename}_{table}_pipeline.json'.format(**locals()))
 
-    schema, table = table.split('.') if '.' in table else 'public', table
+    # tablename should be always prefixed
+    if '.' not in table:
+        table = 'public.{}'.format(table)
+
+    cmd = "pdal info --summary {}".format(filename)
+    try:
+        output = check_output(shlex.split(cmd))
+    except CalledProcessError as e:
+        fatal(e)
+
+    summary = json.loads(output.decode())['summary']
+
+    if summary['srs']['isgeographic']:
+        # geographic
+        scale_x, scale_y, scale_z = (1e-6, 1e-6, 1e-2)
+    else:
+        # projection or geocentric
+        scale_x, scale_y, scale_z = (0.01, 0.01, 0.01)
+
+    offset_x = summary['bounds']['X']['min'] + (summary['bounds']['X']['max'] - summary['bounds']['X']['min']) / 2
+    offset_y = summary['bounds']['Y']['min'] + (summary['bounds']['Y']['max'] - summary['bounds']['Y']['min']) / 2
+    offset_z = summary['bounds']['Z']['min'] + (summary['bounds']['Z']['max'] - summary['bounds']['Z']['min']) / 2
+
+    offset_x = round(offset_x, 2)
+    offset_y = round(offset_y, 2)
+    offset_z = round(offset_z, 2)
+
+    if extension == 'e57':
+        # summary gives empty results for this format
+        offset_x = 0
+        offset_y = 0
+        offset_z = 0
+        scale_x, scale_y, scale_z = (1, 1, 1)
+
+    pg_name = app.config['PG_NAME']
+    pg_port = app.config['PG_PORT']
+    pg_user = app.config['PG_USER']
+    pg_password = app.config['PG_PASSWORD']
+    realfilename = str(filename.resolve())
+    schema, tab = table.split('.')
+    srid = proj42epsg(summary['srs']['proj4'])
 
     json_pipeline = """
 {{
-    "pipeline": [
-        {{
-            "type": "readers.{7}",
-            "filename":"{0}"
-        }},
-        {{
-            "type": "filters.chipper",
-            "capacity":400
-        }},
-        {{
-            "type": "filters.revertmorton"
-        }},
-        {{
-            "type":"writers.pgpointcloud",
-            "connection":"dbname={1} port={2} user={3} password={4}",
-            "schema": "{5}",
-            "table":"{6}",
-            "compression":"none",
-            "srid":"0",
-            "overwrite":"true",
-            "column": "points"
-        }}
-    ]
-}}""".format(
-        str(filename.resolve()),
-        app.config['PG_NAME'],
-        app.config['PG_PORT'],
-        app.config['PG_USER'],
-        app.config['PG_PASSWORD'],
-        schema,
-        table,
-        extension
-    )
+"pipeline": [
+    {{
+        "type": "readers.{extension}",
+        "filename":"{realfilename}"
+    }},
+    {{
+        "type": "filters.chipper",
+        "capacity":400
+    }},
+    {{
+        "type": "filters.revertmorton"
+    }},
+    {{
+        "type":"writers.pgpointcloud",
+        "connection":"dbname={pg_name} port={pg_port} user={pg_user} password={pg_password}",
+        "schema": "{schema}",
+        "table":"{tab}",
+        "compression":"none",
+        "srid":"{srid}",
+        "overwrite":"true",
+        "column": "points",
+        "scale_x": "{scale_x}",
+        "scale_y": "{scale_y}",
+        "scale_z": "{scale_z}",
+        "offset_x": "{offset_x}",
+        "offset_y": "{offset_y}",
+        "offset_z": "{offset_z}"
+    }}
+]
+}}""".format(**locals())
 
     with io.open(json_path, 'w') as json_file:
         json_file.write(json_pipeline)
@@ -140,12 +195,17 @@ def load(filename, table, column, work_dir, server_url):
     """.format(**locals()))
     ok()
 
-    # create a session dedicated to given table and column
+    pending("Adding metadata for lopocs")
+    Session.update_metadata(
+        table, column, srid, scale_x, scale_y, scale_z,
+        offset_x, offset_y, offset_z
+    )
+    # add schema currently used by potree (version 1.5RC)
+    Session.add_output_schema(
+        table, column, 0.01, 0.01, 0.01,
+        offset_x, offset_y, offset_z, srid, potree_schema
+    )
     lpsession = Session(table, column)
-
-    pending("Loading metadata for lopocs")
-    lpsession.load_lopocs_metadata(table, 0.01, 0)
-    lpsession.load_lopocs_metadata(table, 0.1, 0)
     ok()
 
     # initialize range for level of details
@@ -177,7 +237,7 @@ def load(filename, table, column, work_dir, server_url):
 
     pending("Building 3Dtiles tileset")
     hcy = threedtiles.build_hierarchy_from_pg(
-        lpsession, table, column, server_url, lod_max, bbox, lod_min
+        lpsession, server_url, lod_max, bbox, lod_min
     )
 
     tileset = os.path.join(str(work_dir.resolve()), 'tileset.json')
@@ -185,3 +245,84 @@ def load(filename, table, column, work_dir, server_url):
     with io.open(tileset, 'wb') as out:
         out.write(hcy.encode())
     ok()
+
+
+@cli.command()
+@click.option('--sample', help="sample lidar file to test", default="airport", type=click.Choice(['airport', 'stsulpice']))
+@click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
+@click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
+def demo(sample, work_dir, server_url):
+    '''
+    Download sample lidar data, load it into your and visualize in potree viewer !
+    '''
+    filepath = Path(samples[sample])
+    dest = os.path.join(work_dir, filepath.name)
+
+    if not os.path.exists(dest):
+        r = requests.get(samples[sample], stream=True)
+        length = int(r.headers['content-length'])
+
+        chunk_size = 512
+        iter_size = 0
+
+        with io.open(dest, 'wb') as fd:
+            with click.progressbar(length=length, label='Downloading sample file') as bar:
+                for chunk in r.iter_content(chunk_size):
+                    fd.write(chunk)
+                    iter_size += chunk_size
+                    bar.update(chunk_size)
+
+    # now load data
+    _load(dest, sample, 'points', work_dir, server_url)
+    # open tab to the API
+    threading.Timer(1.5, lambda: webbrowser.open_new_tab(server_url)).start()
+    # run application
+    app.run(debug=False)
+
+
+def proj42epsg(proj4, epsg='/usr/share/proj/epsg', forceProj4=False):
+    ''' Transform a WKT string to an EPSG code
+
+    Arguments
+    ---------
+
+    proj4: proj4 string definition
+    epsg: the proj.4 epsg file (defaults to '/usr/local/share/proj/epsg')
+    forceProj4: whether to perform brute force proj4 epsg file check (last resort)
+
+    Returns: EPSG code
+
+    '''
+    code = '4326'
+    p_in = SpatialReference()
+    s = p_in.ImportFromProj4(proj4)
+    if s == 5:  # invalid WKT
+        return '%s' % code
+    if p_in.IsLocal() == 1:  # this is a local definition
+        return p_in.ExportToWkt()
+    if p_in.IsGeographic() == 1:  # this is a geographic srs
+        cstype = 'GEOGCS'
+    else:  # this is a projected srs
+        cstype = 'PROJCS'
+    an = p_in.GetAuthorityName(cstype)
+    ac = p_in.GetAuthorityCode(cstype)
+    if an is not None and ac is not None:  # return the EPSG code
+        return '%s' % p_in.GetAuthorityCode(cstype)
+    else:  # try brute force approach by grokking proj epsg definition file
+        p_out = p_in.ExportToProj4()
+        if p_out:
+            if forceProj4 is True:
+                return p_out
+            f = open(epsg)
+            for line in f:
+                if line.find(p_out) != -1:
+                    m = re.search('<(\\d+)>', line)
+                    if m:
+                        code = m.group(1)
+                        break
+            if code:  # match
+                return '%s' % code
+            else:  # no match
+                return '%s' % code
+        else:
+            return '%s' % code

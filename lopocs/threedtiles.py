@@ -37,10 +37,26 @@ def ThreeDTilesInfo(table, column):
 def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
 
     session = Session(table, column)
-    offset = utils.list_from_str(offsets)
+    offsets = utils.list_from_str(offsets)
     box = utils.list_from_str(bounds)
+    scales = [scale] * 3
+    requested = [scales, offsets]
+    pcid = None
+    stored_patches = session.lopocstable.filter_stored_output()
+    schema = stored_patches['point_schema']
 
-    [tile, npoints] = get_points(session, box, lod, offset, session.output_pcid(scale), scale)
+    for output in session.lopocstable.outputs:
+        if requested == [output['scales'], output['offsets']]:
+            pcid = output['pcid']
+        print(requested)
+    if not pcid:
+        pcid = session.add_output_schema(
+            session.table, session.column,
+            scales[0], scales[1], scales[2],
+            offsets[0], offsets[1], offsets[2],
+            session.lopocstable.srid, schema)
+
+    [tile, npoints] = get_points(session, box, lod, offsets, pcid, scales, schema)
 
     if Config.DEBUG:
         tile.sync()
@@ -52,8 +68,8 @@ def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
     return response
 
 
-def get_points(session, box, lod, offset, schema_pcid, scale):
-    sql = sql_query(session, box, schema_pcid, lod)
+def get_points(session, box, lod, offsets, pcid, scales, schema):
+    sql = sql_query(session, box, pcid, lod)
     if Config.DEBUG:
         print(sql)
 
@@ -61,7 +77,7 @@ def get_points(session, box, lod, offset, schema_pcid, scale):
     npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
 
     # extract data
-    [decompressed_str, itemsize] = decompress(pcpatch_wkb)
+    [decompressed_str, itemsize] = decompress(pcpatch_wkb, schema)
 
     pdt = np.dtype([('X', '<f4'), ('Y', '<f4'), ('Z', '<f4')])
     cdt = np.dtype([('Red', 'u1'), ('Green', 'u1'), ('Blue', 'u1')])
@@ -96,21 +112,21 @@ def get_points(session, box, lod, offset, schema_pcid, scale):
         else:
             col_arr = np.array([(0, 0, 0)], dtype=cdt).view('uint8')
 
-        xfin = xd*scale
-        yfin = yd*scale
-        zfin = zd*scale
+        xfin = xd * scales[0]
+        yfin = yd * scales[1]
+        zfin = zd * scales[2]
         pos_arr = np.array([(xfin, yfin, zfin)], dtype=pdt).view('uint8')
 
         feat = py3dtiles.Feature.from_array(pdt, pos_arr, cdt, col_arr)
         features.append(feat)
 
     tile = py3dtiles.Tile.from_features(pdt, cdt, features)
-    tile.body.feature_table.header.rtc = offset
+    tile.body.feature_table.header.rtc = offsets
 
     return [tile, npoints]
 
 
-def sql_query(session, box, schema_pcid, lod):
+def sql_query(session, box, pcid, lod):
     poly = utils.boundingbox_to_polygon(box)
 
     # retrieve the number of points to select in a pcpatch
@@ -125,11 +141,11 @@ def sql_query(session, box, schema_pcid, lod):
             beg = beg + pow(4, i)
 
         end = 0
-        for i in range(0, lod+1):
+        for i in range(0, lod + 1):
             end = end + pow(4, i)
 
         range_min = beg
-        range_max = end-beg
+        range_max = end - beg
 
     # build the sql query
     sql_limit = ""
@@ -146,7 +162,7 @@ def sql_query(session, box, schema_pcid, lod):
                .format(session.column, session.table,
                        poly, session.srsid, range_min, range_max,
                        box[2] - 0.1, box[5] + 0.1, sql_limit,
-                       schema_pcid))
+                       pcid))
     else:
         sql = ("select pc_compress(pc_setpcid(pc_union("
                "pc_filterbetween( "
@@ -156,13 +172,15 @@ def sql_query(session, box, schema_pcid, lod):
                .format(session.column, session.table,
                        poly, session.srsid, range_min, range_max,
                        box[2], box[5], sql_limit,
-                       schema_pcid))
+                       pcid))
 
     return sql
 
 
-def build_hierarchy_from_pg(session, table, column, baseurl, lod_max, bbox, lod):
-    pcid = session.output_pcid(0.1)  # arbitrary chosen
+def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
+
+    stored_patches = session.lopocstable.filter_stored_output()
+    pcid = stored_patches['pcid']
 
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
@@ -180,13 +198,12 @@ def build_hierarchy_from_pg(session, table, column, baseurl, lod_max, bbox, lod)
               .format(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]))
     offsets_str = "offsets=[{0},{1},{2}]".format(center_x, center_y, center_z)
     paramscale = "scale=0.1"
-    table = "table={}".format(table)
-    column = "column={}".format(column)
+    resource = "{}.{}".format(session.table, session.column)
 
-    base_url = "{0}/3dtiles/read.pnts".format(baseurl)
+    base_url = "{0}/{1}/3dtiles/read.pnts".format(baseurl, resource)
     url = (
-        "{0}?{1}&{2}&{3}&{4}&{5}&{6}"
-        .format(base_url, lod_str, bounds, offsets_str, paramscale, table, column)
+        "{0}?{1}&{2}&{3}&{4}"
+        .format(base_url, lod_str, bounds, offsets_str, paramscale)
     )
 
     root = {}
@@ -210,7 +227,7 @@ def build_hierarchy_from_pg(session, table, column, baseurl, lod_max, bbox, lod)
     return json.dumps(tileset, indent=4, separators=(',', ': '))
 
 
-def build_children_section(baseurl, offsets, bbox, err, lod):
+def build_children_section(session, baseurl, offsets, bbox, err, lod):
 
     cjson = {}
 
@@ -220,7 +237,8 @@ def build_children_section(baseurl, offsets, bbox, err, lod):
     offsets_str = "offsets=[{0},{1},{2}]".format(offsets[0], offsets[1], offsets[2])
     scale = "scale=0.1"
 
-    baseurl = "{0}/3dtiles/read.pnts".format(baseurl)
+    resource = "{}.{}".format(session.table, session.column)
+    baseurl = "{0}/{1}/3dtiles/read.pnts".format(baseurl, resource)
     url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod, bounds, offsets_str, scale)
 
     bvol = {}
@@ -268,8 +286,8 @@ def children(session, baseurl, lod_max, offsets, bbox, lod, pcid):
     if lod <= lod_max and pcpatch_wkb:
         npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
         if npoints > 0:
-            err = GEOMETRIC_ERROR_DEFAULT/(2*(lod+1))
-            json_me = build_children_section(baseurl, offsets, bbox, err, lod)
+            err = GEOMETRIC_ERROR_DEFAULT / (2 * (lod + 1))
+            json_me = build_children_section(session, baseurl, offsets, bbox, err, lod)
 
         lod += 1
 

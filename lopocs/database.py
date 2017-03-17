@@ -1,39 +1,177 @@
 # -*- coding: utf-8 -*-
-from functools import lru_cache
 from multiprocessing import cpu_count
+from collections import defaultdict
 
 import psycopg2.extras
 import psycopg2.extensions
+from psycopg2.extras import Json
 from psycopg2.pool import ThreadedConnectionPool
 from osgeo.osr import SpatialReference
 
-from . import utils
-from .potreeschema import pcschema
-
+from .utils import iterable2pgarray, list_from_str_box, greyhound_types
+from .potreeschema import create_pointcloud_schema
 
 psycopg2.extensions.register_adapter(dict, psycopg2.extras.Json)
+
+
+LOPOCS_TABLE_QUERY = """
+create table if not exists pointcloud_lopocs (
+    id serial primary key
+    , schematable varchar
+    , "column" varchar
+    , srid integer
+    , max_patches_per_query integer default 4096
+    , max_points_per_patch integer default NULL
+    , bbox jsonb
+    , constraint uniq_table_col UNIQUE (schematable, "column")
+    , constraint check_schematable_exists
+        CHECK (to_regclass(schematable) is not null)
+);
+create table if not exists pointcloud_lopocs_outputs (
+    id integer references pointcloud_lopocs(id) on delete cascade
+    , pcid integer references pointcloud_formats(pcid) on delete cascade
+    , scales float[3]
+    , offsets float[3]
+    , point_schema jsonb
+    , stored boolean
+    , bbox float[6]
+    -- only one schema is used to store patches
+    , constraint uniqstoredpcid UNIQUE (pcid, stored)
+    , constraint uniqschema UNIQUE (pcid, scales, offsets, point_schema)
+)
+"""
+
+# get a list of outputs formats available
+LOPOCS_OUTPUTS_QUERY = """
+select
+    min(pl.schematable)
+    , min(pl."column")
+    , min(pl.srid)
+    , min(pc.pcid)
+    , array_agg(plo.pcid)
+    , array_agg(plo.scales)
+    , array_agg(plo.offsets)
+    , array_agg(plo.point_schema)
+    , array_agg(plo.bbox)
+    , array_agg(plo.stored)
+    , min(pl.max_patches_per_query)
+    , min(pl.max_points_per_patch)
+    , pl.bbox
+from pointcloud_lopocs pl
+join pointcloud_columns pc
+    on concat(pc."schema", '.', pc."table") = pl.schematable
+    and pc."column" = pl."column"
+join pointcloud_lopocs_outputs plo on plo.id = pl.id
+where
+    to_regclass(schematable) is not null -- check if table still exists in pg catalog
+group by pl.id, pl.bbox
+"""
 
 
 class LopocsException(Exception):
     pass
 
 
+class LopocsTable():
+    """
+    Used to cache content of pointcloud_lopocs* tables and
+    avoid roundtrips to the database.
+
+    Outputs attribute looks like :
+    outputs": [
+        {
+            "offsets": [728630.47, 4676727.02, 309.86],
+            "scales": [0.01,0.01,0.01],
+            "stored": true,
+            "point_schema": [
+                {
+                    "type": "unsigned",
+                    "name": "Intensity",
+                    "size": 2
+                },...
+            ],
+            "pcid": 1,
+            "bbox": [xmin,ymin,zmin,xmax,ymax,zmax]
+        },...
+    ]
+    """
+    __slots__ = (
+        'table', 'column', 'srid', 'pcid', 'outputs',
+        'max_patches_per_query', 'max_points_per_patch', 'bbox'
+    )
+
+    def __init__(self, table, column, srid, pcid, outputs,
+                 max_patches_per_query, max_points_per_patch, bbox):
+        self.table = table
+        self.column = column
+        self.outputs = outputs
+        self.srid = srid
+        self.pcid = pcid
+        self.max_patches_per_query = max_patches_per_query
+        self.max_points_per_patch = max_points_per_patch
+        self.bbox = bbox
+
+    def filter_stored_output(self):
+        '''
+        Find and return the output corresponding to the stored patches
+        '''
+        return [
+            output
+            for output in self.outputs
+            if output['stored']
+        ][0]
+
+    def asjson(self):
+        '''
+        return a json representation of this object
+        '''
+        return {
+            'table': self.table,
+            'column': self.column,
+            'outputs': self.outputs,
+            'srid': self.srid,
+            'pcid': self.pcid,
+            'max_patches_per_query': self.max_patches_per_query,
+            'max_points_per_patch': self.max_points_per_patch,
+            'bbox': self.bbox,
+        }
+
+
 class Session():
     """
     Session object used as a global connection object to the db
 
+    ``catalog`` contains lopocs table cache
+    catalog  = {
+        ('public.table'): LopocsTableInstance
+    }
     """
     db = None
-    cache_pcid = {}
+    catalog = defaultdict(dict)
 
     @classmethod
-    @lru_cache(maxsize=1)
-    def table_list(cls):
-        results = cls.query("""
-            select concat(schema, '.', "table") as table, "column", srid
-            from pointcloud_columns
-        """)
-        return {(res[0], res[1]): res[2] for res in results}
+    def clear_catalog(cls):
+        cls.catalog.clear()
+
+    @classmethod
+    def fill_catalog(cls):
+        """
+        Get all output tables and fill the catalog
+        Each output table should have :
+
+
+        """
+        keys = ('pcid', 'scales', 'offsets', 'point_schema', 'bbox', 'stored')
+        results = cls.query(LOPOCS_OUTPUTS_QUERY)
+        for res in results:
+            cls.catalog[(res[0], res[1])] = LopocsTable(
+                res[0], res[1], res[2], res[3],
+                [
+                    dict(zip(keys, values))
+                    for values in zip(res[4], res[5], res[6], res[7], res[8], res[9])
+                ],
+                res[10], res[11], res[12]
+            )
 
     @classmethod
     def init_app(cls, app):
@@ -47,16 +185,22 @@ class Session():
         # keep some configuration element
         cls.dbname = app.config["PG_NAME"]
 
-    def __init__(self, table, column='pa'):
+    def __init__(self, table, column):
         """
-        :param table: table name (with schema if needed) ex: public.mytable
+        Initialize a session for a given couple of table and column.
+
+        :param table: table name (with schema prefixed) ex: public.mytable
+        :param column: column name for patches
         """
-        if '.' not in table:
-            self.table = 'public.{}'.format(table)
-        else:
-            self.table = table
-        if (self.table, column) not in self.table_list():
-            raise LopocsException('table or column does not exists')
+        if (table, column) not in self.catalog:
+            if not self.catalog:
+                # catalog empty
+                self.fill_catalog()
+            if (table, column) not in self.catalog:
+                raise LopocsException('table or column not found in database')
+
+        self.lopocstable = self.catalog[(table, column)]
+        self.table = table
         self.column = column
 
     @property
@@ -81,17 +225,6 @@ class Session():
         return self.query(sql)[0][0]
 
     @property
-    @lru_cache(maxsize=1)
-    def max_patchs_per_query(self):
-        sql = """
-            select max_patchs_per_query
-            from pointcloud_lopocs
-            where tablename = %s limit 1
-        """
-        value = self.query(sql, (self.table, ))[0][0]
-        return value
-
-    @property
     def numpoints(self):
         sql = """
             select sum(pc_numpoints({}))
@@ -101,58 +234,46 @@ class Session():
 
     @property
     def boundingbox(self):
-        sql = """
-            select bbox
-            from pointcloud_lopocs
-            where tablename = %s limit 1
-        """
-        res = self.query(sql, (self.table, ))
-        if not res:
-            return ''
-        return res[0][0]
+        return self.lopocstable.bbox
 
-    def compute_boundingbox(self):
+    @classmethod
+    def compute_boundingbox(cls, table, column):
         """
         It's faster to use st_extent to find x/y extent then to use
         pc_intersect to find the z extent than using pc_intersect for each
         dimension.
         """
-        extent_2d = self.boundingbox2d()
+        sql = (
+            "SELECT ST_Extent({}::geometry) as table_extent from {}"
+            .format(column, table)
+        )
+        bb = cls.query(sql)[0][0]
+        bb_xy = list_from_str_box(bb)
+
+        extent = {}
+        extent['xmin'] = bb_xy[0]
+        extent['ymin'] = bb_xy[1]
+        extent['xmax'] = bb_xy[2]
+        extent['ymax'] = bb_xy[3]
 
         sql = """
             select
                 min(pc_patchmin({0}, 'z')) as zmin
                ,max(pc_patchmax({0}, 'z')) as zmax
             from {1}
-        """.format(self.column, self.table)
-        bb_z = self.query(sql)[0]
+        """.format(column, table)
+        bb_z = cls.query(sql)[0]
 
         bb = {}
-        bb.update(extent_2d)
+        bb.update(extent)
         bb['zmin'] = float(bb_z[0])
         bb['zmax'] = float(bb_z[1])
 
         return bb
 
-    def boundingbox2d(self):
-        sql = (
-            "SELECT ST_Extent({}::geometry) as table_extent from {}"
-            .format(self.column, self.table)
-        )
-        bb = self.query(sql)[0][0]
-        bb_xy = utils.list_from_str_box(bb)
-
-        bb = {}
-        bb['xmin'] = bb_xy[0]
-        bb['ymin'] = bb_xy[1]
-        bb['xmax'] = bb_xy[2]
-        bb['ymax'] = bb_xy[3]
-
-        return bb
-
     @property
     def srsid(self):
-        return self.table_list()[(self.table, self.column)]
+        return self.lopocstable.srid
 
     @property
     def srs(self):
@@ -160,25 +281,24 @@ class Session():
         sr.ImportFromEPSG(self.srsid)
         return sr.ExportToWkt()
 
-    def schema(self):
-        sql = """
-            select pc_summary({})::json->'dims' as srsid
-            from {}
-            limit 1
-        """.format(self.column, self.table)
-        schema = self.query(sql)[0][0]
+    @classmethod
+    def patch2greyhoundschema(cls, table, column):
+        '''Returns json schema used by Greyhound
+        with dimension types adapted.
+        - https://github.com/hobu/greyhound/blob/master/doc/clientDevelopment.rst#schema
+        - https://www.pdal.io/dimensions.html
+        '''
+        dims = cls.query("""
+            select pc_summary({})::json->'dims' from {} limit 1
+        """.format(column, table))[0][0]
+        schema = []
+        for dim in dims:
+            schema.append({
+                'size': dim['size'],
+                'type': greyhound_types(dim['type']),
+                'name': dim['name'],
+            })
         return schema
-
-    def output_pcid(self, scale):
-        if (self.table, scale) in self.cache_pcid:
-            return self.cache_pcid[(self.table, scale)]
-        sql = """
-            select pcid from pointcloud_lopocs
-            where tablename = %s and scale = %s
-        """
-        pcid = self.query(sql, (self.table, scale))[0][0]
-        self.cache_pcid[(self.table, scale)] = pcid
-        return pcid
 
     @classmethod
     def create_pointcloud_lopocs_table(cls):
@@ -186,43 +306,100 @@ class Session():
         Create a metadata table that stores a link between an output schema
         for a given table (to be used by the couple greyhound/potree)
         """
-        cls.execute("""
-            create table if not exists pointcloud_lopocs (
-                tablename varchar
-                , pcid integer references pointcloud_formats(pcid) on delete cascade
-                , scale float
-                , max_patchs_per_query integer default 4096
-                , bbox jsonb
-                , primary key (tablename, pcid)
-                , constraint uk_pointcloud_lopocs_table_scale unique (tablename, scale)
+        cls.execute(LOPOCS_TABLE_QUERY)
+
+    @property
+    def get_patch_scale_offset(self):
+        '''Get the scale and offset used in stored patches'''
+        res = self.query("""
+            select scales_offsets from pointcloud_lopocs_outputs p
+            join (select pc_pcid({}) as pcid from {} limit 1) t
+                on t.pcid = p.pcid
+            """.format(self.column, self.table)
+        )
+        if not res:
+            raise LopocsException(
+                'Integrity error between patch table and pointcloud_lopocs_outputs'
             )
-            """)
+        return res[0][0]
 
-    def load_lopocs_metadata(self, table, scale, srid, compression='none'):
+    @classmethod
+    def update_metadata(cls, table, column, srid, scale_x, scale_y, scale_z,
+                        offset_x, offset_y, offset_z):
         """
-        Load schema used to stream patches with greyhound
+        Add an entry to the lopocs metadata tables to use.
+        To be used after a fresh pc table creation.
         """
-        fullbbox = self.compute_boundingbox()
-        bbox = [fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
-                fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']]
+        pcid = cls.query("""
+            select pcid from pointcloud_columns
+            where "schema" = %s and "table" = %s and "column" = %s
+            """, (table.split('.')[0], table.split('.')[1], column)
+        )[0][0]
 
-        x_offset = bbox[0] + (bbox[3] - bbox[0]) / 2
-        y_offset = bbox[1] + (bbox[4] - bbox[1]) / 2
-        z_offset = bbox[2] + (bbox[5] - bbox[2]) / 2
+        bbox = cls.compute_boundingbox(table, column)
+        # compute bbox with offset and scale applied
+        bbox_scaled = [0] * 6
+        bbox_scaled[0] = (bbox['xmin'] - offset_x) / scale_x
+        bbox_scaled[1] = (bbox['ymin'] - offset_y) / scale_y
+        bbox_scaled[2] = (bbox['zmin'] - offset_z) / scale_z
+        bbox_scaled[3] = (bbox['xmax'] - offset_x) / scale_x
+        bbox_scaled[4] = (bbox['ymax'] - offset_y) / scale_y
+        bbox_scaled[5] = (bbox['zmax'] - offset_z) / scale_z
 
-        x_offset = float("{0:.3f}".format(x_offset))
-        y_offset = float("{0:.3f}".format(y_offset))
-        z_offset = float("{0:.3f}".format(z_offset))
+        res = cls.query("""
+            delete from pointcloud_lopocs where schematable = %s and "column" = %s;
+            insert into pointcloud_lopocs (schematable, "column", srid, bbox)
+            values (%s, %s, %s, %s) returning id
+            """, (table, column, table, column, srid, bbox))
+        plid = res[0][0]
 
-        # check if schema already exists
+        scales = scale_x, scale_y, scale_z
+        offsets = offset_x, offset_y, offset_z
+
+        json_schema = cls.patch2greyhoundschema(table, column)
+
+        cls.execute("""
+            insert into pointcloud_lopocs_outputs
+            (id, pcid, scales, offsets, stored, bbox, point_schema)
+            values (%s, %s, %s, %s, True, %s, %s)
+        """, (
+            plid, pcid, iterable2pgarray(scales), iterable2pgarray(offsets),
+            iterable2pgarray(bbox_scaled), Json(json_schema)))
+
+    @classmethod
+    def add_output_schema(cls, table, column,
+                          scale_x, scale_y, scale_z,
+                          offset_x, offset_y, offset_z, srid,
+                          schema, compression='none'):
+        """
+        Adds a new schema used to stream points.
+        The new point format will be added to the database if it doesn't exists
+        """
+        bbox = cls.compute_boundingbox(table, column)
+
+        # compute bbox with offset and scale applied
+        bbox_scaled = [0] * 6
+        bbox_scaled[0] = (bbox['xmin'] - offset_x) / scale_x
+        bbox_scaled[1] = (bbox['ymin'] - offset_y) / scale_y
+        bbox_scaled[2] = (bbox['zmin'] - offset_z) / scale_z
+        bbox_scaled[3] = (bbox['xmax'] - offset_x) / scale_x
+        bbox_scaled[4] = (bbox['ymax'] - offset_y) / scale_y
+        bbox_scaled[5] = (bbox['zmax'] - offset_z) / scale_z
+
+        scales = scale_x, scale_y, scale_z
+        offsets = offset_x, offset_y, offset_z
+
+        xmlschema = create_pointcloud_schema(schema, scales, offsets)
+
+        # check if the schema already exists
         res = Session.query(
             """ select pcid from pointcloud_formats
                 where srid = %s and schema = %s
-            """, (srid, pcschema.format(**locals()))
+            """, (srid, xmlschema)
         )
         if not res:
             # insert schema
-            res = self.query(
+            res = cls.query(
                 """ with tmp as (
                         select max(pcid) + 1 as pcid
                         from pointcloud_formats
@@ -230,20 +407,25 @@ class Session():
                     insert into pointcloud_formats
                     select pcid, %s, %s from tmp
                     returning pcid
-                """, (srid, pcschema.format(**locals()))
+                """, (srid, xmlschema)
             )
 
         pcid = res[0][0]
 
-        # update entries in pointcloud_lopocs
-        self.execute("""
-            delete from pointcloud_lopocs where tablename = %s and pcid = %s;
-            insert into pointcloud_lopocs (tablename, pcid, scale, bbox)
-            values (%s, %s, %s, %s)
-        """, (self.table, pcid, self.table, pcid, scale, fullbbox))
+        # check if lopocs already contains this configuration
+        plid = cls.query("""
+            select id from pointcloud_lopocs
+                where schematable = %s and "column" = %s;
+        """, (table, column))[0][0]
 
-        # fill cache
-        self.cache_pcid[(table, scale)] = pcid
+        cls.execute("""
+            insert into pointcloud_lopocs_outputs
+            (id, pcid, scales, offsets, stored, bbox, point_schema)
+            values (%s, %s, %s, %s, False, %s, %s)
+        """, (
+            plid, pcid, iterable2pgarray(scales), iterable2pgarray(offsets),
+            iterable2pgarray(bbox_scaled), Json(schema)))
+
         return pcid
 
     @classmethod
