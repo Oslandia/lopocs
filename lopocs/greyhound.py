@@ -51,14 +51,14 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
     # we treat scales as list
     scales = [scale] * 3
     # convert string schema to a list of dict
-    schema = json.loads(schema)
+    schema = sorted(json.loads(schema), key=lambda x: x['name'])
 
     if offset is None and scale is None and bounds is None:
         # normalization request from potree gives no bounds, no scale and
         # no offset, only a schema
         found = False
         for output in session.lopocstable.outputs:
-            if sorted(schema, key=lambda x: x['name']) == sorted(output['point_schema'], key=lambda x: x['name']):
+            if schema == sorted(output['point_schema'], key=lambda x: x['name']):
                 pcid = output['pcid']
                 found = True
         if not found:
@@ -72,13 +72,14 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
         offset = list_from_str(offset)
         offsets = [round(off, 2) for off in offset]
         # check if schema, scale and offset exists in our db
-        requested = [scales, offsets, schema]
+        requested = [scales, offsets, sorted(schema, key=lambda x: x['name'])]
 
         pcid = None
         found = False
 
         for output in session.lopocstable.outputs:
-            if requested == [output['scales'], output['offsets'], output['point_schema']]:
+            oschema = sorted(output['point_schema'], key=lambda x: x['name'])
+            if requested == [output['scales'], output['offsets'], oschema]:
                 pcid = output['pcid']
                 found = True
 
