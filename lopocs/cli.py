@@ -87,6 +87,7 @@ def cli():
 @cli.command()
 def serve():
     '''run lopocs server (development usage)'''
+    CORS(app)
     app.run()
 
 
@@ -266,7 +267,7 @@ def _load(filename, table, column, work_dir, server_url):
 
 
 @cli.command()
-@click.option('--sample', help="sample lidar file to test", default="airport", type=click.Choice(['airport', 'stsulpice']))
+@click.option('--sample', help="sample data available", default="airport", type=click.Choice(['airport', 'stsulpice']))
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 def demo(sample, work_dir, server_url):
@@ -303,7 +304,7 @@ def demo(sample, work_dir, server_url):
     # run the lopocs server
     # add cors headers for testing
     CORS(app)
-    app.run(debug=False)
+    app.run()
 
 
 def proj42epsg(proj4, epsg='/usr/share/proj/epsg', forceProj4=False):
