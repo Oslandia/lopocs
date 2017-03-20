@@ -200,7 +200,7 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
     paramscale = "scale=0.1"
     resource = "{}.{}".format(session.table, session.column)
 
-    base_url = "{0}/{1}/3dtiles/read.pnts".format(baseurl, resource)
+    base_url = "{0}/3dtiles/{1}/read.pnts".format(baseurl, resource)
     url = (
         "{0}?{1}&{2}&{3}&{4}"
         .format(base_url, lod_str, bounds, offsets_str, paramscale)
@@ -238,7 +238,7 @@ def build_children_section(session, baseurl, offsets, bbox, err, lod):
     scale = "scale=0.1"
 
     resource = "{}.{}".format(session.table, session.column)
-    baseurl = "{0}/{1}/3dtiles/read.pnts".format(baseurl, resource)
+    baseurl = "{0}/3dtiles/{1}/read.pnts".format(baseurl, resource)
     url = "{0}?{1}&{2}&{3}&{4}".format(baseurl, lod, bounds, offsets_str, scale)
 
     bvol = {}
