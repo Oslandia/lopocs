@@ -413,7 +413,7 @@ class Session():
             plid, pcid, iterable2pgarray(scales), iterable2pgarray(offsets),
             iterable2pgarray(bbox_scaled), Json(schema)))
 
-        return pcid
+        return pcid, bbox_scaled
 
     @classmethod
     def execute(cls, query, parameters=None):

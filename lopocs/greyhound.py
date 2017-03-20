@@ -51,40 +51,58 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
     # we treat scales as list
     scales = [scale] * 3
     # convert string schema to a list of dict
-    schema = sorted(json.loads(schema), key=lambda x: x['name'])
+    schema = json.loads(schema)
+    pcid = None
 
     if offset is None and scale is None and bounds is None:
         # normalization request from potree gives no bounds, no scale and
         # no offset, only a schema
         for output in session.lopocstable.outputs:
-            if schema == sorted(output['point_schema'], key=lambda x: x['name']):
+            if schema == output['point_schema']:
                 pcid = output['pcid']
         if not pcid:
             obj = session.lopocstable.outputs[0]
-            pcid = session.add_output_schema(
+            pcid, bbox = session.add_output_schema(
                 session.table, session.column,
                 obj['scales'][0], obj['scales'][1], obj['scales'][2],
                 obj['offsets'][0], obj['offsets'][1], obj['offsets'][2],
                 session.lopocstable.srid, schema)
+            session.lopocstable.outputs.append(dict(
+                scales=scales,
+                offsets=obj['offsets'],
+                pcid=pcid,
+                point_schema=schema,
+                stored=False,
+                bbox=bbox
+            ))
+
     else:
         offset = list_from_str(offset)
         offsets = [round(off, 2) for off in offset]
         # check if schema, scale and offset exists in our db
-        requested = [scales, offsets, sorted(schema, key=lambda x: x['name'])]
-        pcid = None
+        requested = [scales, offsets, schema]
 
         for output in session.lopocstable.outputs:
-            oschema = sorted(output['point_schema'], key=lambda x: x['name'])
+            oschema = output['point_schema']
             if requested == [output['scales'], output['offsets'], oschema]:
                 pcid = output['pcid']
 
         if not pcid:
             # insert new schem
-            pcid = session.add_output_schema(
+            pcid, bbox = session.add_output_schema(
                 session.table, session.column,
                 scales[0], scales[1], scales[2],
                 offsets[0], offsets[1], offsets[2],
                 session.lopocstable.srid, schema)
+            # update cache
+            session.lopocstable.outputs.append(dict(
+                scales=scales,
+                offsets=offsets,
+                pcid=pcid,
+                point_schema=schema,
+                stored=False,
+                bbox=bbox
+            ))
 
     # prepare parameters
     if not bounds and depth == 0:

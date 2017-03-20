@@ -37,7 +37,7 @@ def ThreeDTilesInfo(table, column):
 def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
 
     session = Session(table, column)
-    offsets = utils.list_from_str(offsets)
+    offsets = [round(off, 2) for off in utils.list_from_str(offsets)]
     box = utils.list_from_str(bounds)
     scales = [scale] * 3
     requested = [scales, offsets]
@@ -50,11 +50,19 @@ def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
             pcid = output['pcid']
         print(requested)
     if not pcid:
-        pcid = session.add_output_schema(
+        pcid, bbox = session.add_output_schema(
             session.table, session.column,
             scales[0], scales[1], scales[2],
             offsets[0], offsets[1], offsets[2],
             session.lopocstable.srid, schema)
+        session.lopocstable.outputs.append(dict(
+            scales=scales,
+            offsets=offsets,
+            pcid=pcid,
+            point_schema=schema,
+            stored=False,
+            bbox=bbox
+        ))
 
     [tile, npoints] = get_points(session, box, lod, offsets, pcid, scales, schema)
 

@@ -77,12 +77,30 @@ dim_skeleton = """<pc:dimension>
 
 schema_skeleton = """<?xml version="1.0" encoding="UTF-8"?>
 <pc:PointCloudSchema xmlns:pc="http://pointcloud.org/schemas/PC/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-{dims_xyz}
 {dims}
 <pc:metadata>
 <Metadata name="compression" type="string"/>{compression}</pc:metadata>
 <pc:orientation>point</pc:orientation>
 </pc:PointCloudSchema>"""
+
+
+def dim_mapper(dimension, scales, offsets, pos):
+    '''redirect to correct xml description depending
+    of the dimension type
+    '''
+    if dimension['name'].lower() in ('x', 'y', 'z'):
+        return dim_skeleton_xyz.format(
+            **dict(dimension,
+                   ctype=ctypes_map[(dimension['type'], dimension['size'])],
+                   scale=scales[dim_arr_index(dimension)],
+                   offset=offsets[dim_arr_index(dimension)],
+                   pos=pos)
+        )
+
+    return dim_skeleton.format(
+        **dict(dimension,
+               ctype=ctypes_map[(dimension['type'], dimension['size'])],
+               pos=pos))
 
 
 def dim_arr_index(dim):
@@ -104,25 +122,13 @@ def create_pointcloud_schema(dimensions, scales, offsets, compression='none'):
     :param scales: array of 3 scales for x, y, z
     :param ofsets: array of 3 offset
     '''
-    xyz_dims = [d for d in dimensions if d['name'].lower() in ('x', 'y', 'z')]
-    other_dims = [d for d in dimensions if d['name'].lower() not in ('x', 'y', 'z')]
-
     pcschema = schema_skeleton.format(
         compression=compression,
-        dims_xyz=''.join(dim_skeleton_xyz.format(
-            **dict(d,
-                   ctype=ctypes_map[(d['type'], d['size'])],
-                   scale=scales[dim_arr_index(d)],
-                   offset=offsets[dim_arr_index(d)],
-                   pos=dim_arr_index(d) + 1))
-            for d in xyz_dims
+        dims=''.join(
+            dim_mapper(d, scales, offsets, pos)
+            for pos, d in enumerate(dimensions, start=1)
         ),
-        dims=''.join(dim_skeleton.format(
-            **dict(d, ctype=ctypes_map[(d['type'], d['size'])], pos=pos))
-            for pos, d in enumerate(other_dims, start=4)
-        )
     )
-
     return pcschema
 
 
@@ -193,7 +199,7 @@ potree_page = """
         viewer.setWeightClassification(1);
         viewer.loadSettingsFromURL();
 
-        viewer.setDescription('Streaming point clouds from an <a href="https://entwine.io/" target="_blank">Entwine</a> backend.');
+        viewer.setDescription('Streaming point clouds from PostgreSQL with <a href="https://github.com/Oslandia/lopocs" target="_blank">LOPoCS</a>.');
 
         viewer.loadGUI(() => {{
             viewer.setLanguage('en');
