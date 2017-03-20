@@ -300,11 +300,7 @@ def demo(sample, work_dir, server_url):
     with io.open(sample_page, 'wb') as html:
         html.write(potree_page.format(resource=resource, server_url=server_url).encode())
 
-    click.echo('Now open the file {}.html in your favorite browser'.format(sample))
-    # run the lopocs server
-    # add cors headers for testing
-    CORS(app)
-    app.run()
+    click.echo('Now launch lopocs with "lopocs serve" and open the file {}.html in your favorite browser'.format(sample))
 
 
 def proj42epsg(proj4, epsg='/usr/share/proj/epsg', forceProj4=False):
