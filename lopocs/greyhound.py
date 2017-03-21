@@ -16,6 +16,8 @@ from .utils import (
 from .conf import Config
 from .stats import Stats
 
+
+# https://github.com/potree/potree/blob/master/src/loader/GreyhoundLoader.js#L194
 LOADER_GREYHOUND_MIN_DEPTH = 8
 
 
