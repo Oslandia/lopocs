@@ -27,7 +27,9 @@ app = create_app()
 
 samples = {
     'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
-    'stsulpice': 'https://freefr.dl.sourceforge.net/project/e57-3d-imgfmt/E57Example-data/Trimble_StSulpice-Cloud-50mm.e57'
+    # e57 reader not yet ready
+    # 'stsulpice': 'https://freefr.dl.sourceforge.net/project/e57-3d-imgfmt/E57Example-data/Trimble_StSulpice-Cloud-50mm.e57',
+    'sthelens': 'http://www.liblas.org/samples/st-helens.las'
 }
 
 
@@ -291,7 +293,7 @@ def create_potree_page(work_dir, server_url, tablename, column):
 
 
 @cli.command()
-@click.option('--sample', help="sample data available", default="airport", type=click.Choice(['airport', 'stsulpice']))
+@click.option('--sample', help="sample data available", default="airport", type=click.Choice(samples.keys()))
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 def demo(sample, work_dir, server_url):
