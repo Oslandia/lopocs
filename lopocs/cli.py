@@ -95,14 +95,15 @@ def serve():
 @click.option('--column', help="column name to store patches", default="points", type=str)
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where temporary files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
+@click.option('--potree', type=bool, help="create an potree demo page", is_flag=True)
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
-def load(filename, table, column, work_dir, server_url):
+def load(filename, table, column, work_dir, server_url, potree):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
-    _load(filename, table, column, work_dir, server_url)
+    _load(filename, table, column, work_dir, server_url, potree)
 
 
-def _load(filename, table, column, work_dir, server_url):
+def _load(filename, table, column, work_dir, server_url, potree):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
     filename = Path(filename)
     work_dir = Path(work_dir)
@@ -265,6 +266,29 @@ def _load(filename, table, column, work_dir, server_url):
         out.write(hcy.encode())
     ok()
 
+    if potree:
+        create_potree_page(str(work_dir.resolve()), server_url, table, column)
+
+
+def create_potree_page(work_dir, server_url, tablename, column):
+    '''Create an html demo page with potree viewer
+    '''
+    # get potree build
+    potree = os.path.join(work_dir, 'potree')
+    potreezip = os.path.join(work_dir, 'potree.zip')
+    if not os.path.exists(potree):
+        download('Getting potree code', 'http://3d.oslandia.com/potree.zip', potreezip)
+        # unzipping content
+        with ZipFile(potreezip) as myzip:
+            myzip.extractall(path=work_dir)
+    pending('Creating a potree demo page : {}.html'.format(tablename))
+    resource = '{}.{}'.format(tablename, column)
+    sample_page = os.path.join(work_dir, '{}.html'.format(tablename))
+    server_url = server_url.replace('http://', '')
+    with io.open(sample_page, 'wb') as html:
+        html.write(potree_page.format(resource=resource, server_url=server_url).encode())
+    ok()
+
 
 @cli.command()
 @click.option('--sample', help="sample data available", default="airport", type=click.Choice(['airport', 'stsulpice']))
@@ -281,24 +305,7 @@ def demo(sample, work_dir, server_url):
         download('Downloading sample', samples[sample], dest)
 
     # now load data
-    _load(dest, sample, 'points', work_dir, server_url)
-
-    # get potree build
-    potree = os.path.join(work_dir, 'potree')
-    potreezip = os.path.join(work_dir, 'potree.zip')
-    if not os.path.exists(potree):
-        download('Getting potree code', 'http://3d.oslandia.com/potree.zip', potreezip)
-        # unzipping content
-        with ZipFile(potreezip) as myzip:
-            myzip.extractall(path=work_dir)
-        ok()
-
-    pending('Creating a demo page : {}.html'.format(sample))
-    resource = 'public.{}.points'.format(sample)
-    sample_page = os.path.join(work_dir, '{}.html'.format(sample))
-    server_url = server_url.replace('http://', '')
-    with io.open(sample_page, 'wb') as html:
-        html.write(potree_page.format(resource=resource, server_url=server_url).encode())
+    _load(dest, sample, 'points', work_dir, server_url, True)
 
     click.echo('Now launch lopocs with "lopocs serve" and open the file {}.html in your favorite browser'.format(sample))
 
