@@ -35,12 +35,12 @@ create table if not exists pointcloud_lopocs_outputs (
     , point_schema jsonb
     , stored boolean
     , bbox float[6]
-    , constraint uniqschema UNIQUE (pcid, scales, offsets, point_schema)
+    , constraint uniqschema UNIQUE (id, pcid)
 );
 -- trick to add a partial constraint
 -- only one schema is used to store patches
 create unique index if not exists uniqidx_pcid_stored
-    on pointcloud_lopocs_outputs (pcid, stored) where (stored is true);
+    on pointcloud_lopocs_outputs (id, pcid, stored) where (stored is true);
 """
 
 # get a list of outputs formats available
