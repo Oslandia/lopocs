@@ -173,7 +173,7 @@ def _load(filename, table, column, work_dir, server_url, potree):
     }},
     {{
         "type": "filters.chipper",
-        "capacity":400
+        "capacity": "400"
     }},
     {{
         "type": "filters.revertmorton"
@@ -212,7 +212,7 @@ def _load(filename, table, column, work_dir, server_url, potree):
     Session.execute("""
         create index on {table} using gist(geometry(points));
         alter table {table} add column morton bigint;
-        select Morton_Update('{table}', 'points', 'morton', 64, TRUE);
+        select Morton_Update('{table}', 'points', 'morton', 128, TRUE);
         create index on {table}(morton);
     """.format(**locals()))
     ok()
