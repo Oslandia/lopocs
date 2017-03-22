@@ -22,7 +22,8 @@ requirements = (
     'py3dtiles',
     'click',
     'requests',
-    'lazperf==0.0.9'
+    'lazperf==0.0.9',
+    'numpy',
 )
 
 dev_requirements = (
