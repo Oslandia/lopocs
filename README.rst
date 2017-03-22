@@ -81,7 +81,7 @@ Configuration
 
 You will find an example of a configuration file for lopocs in ``conf/lopocs.sample.yml``
 
-You can copy it to ``copy/lopocs.yml`` and fill with your values, lopocs will load it
+You can copy it to ``conf/lopocs.yml`` and fill with your values, lopocs will load it
 if this file exists.
 
 Usage
