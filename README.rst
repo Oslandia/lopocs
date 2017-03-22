@@ -102,7 +102,6 @@ Prepare database
   CREATE EXTENSION
   lopocs_test=# create extension morton;
   CREATE EXTENSION
-  ```
 
 Fill the database with lopocs command line
 ------------------------------------------
