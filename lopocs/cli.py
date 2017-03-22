@@ -156,6 +156,7 @@ def _load(filename, table, column, work_dir, server_url, potree):
         offset_z = 0
         scale_x, scale_y, scale_z = (1, 1, 1)
 
+    pg_host = app.config['PG_HOST']
     pg_name = app.config['PG_NAME']
     pg_port = app.config['PG_PORT']
     pg_user = app.config['PG_USER']
@@ -180,7 +181,7 @@ def _load(filename, table, column, work_dir, server_url, potree):
     }},
     {{
         "type":"writers.pgpointcloud",
-        "connection":"dbname={pg_name} port={pg_port} user={pg_user} password={pg_password}",
+        "connection":"dbname={pg_name} host={pg_host} port={pg_port} user={pg_user} password={pg_password}",
         "schema": "{schema}",
         "table":"{tab}",
         "compression":"none",
