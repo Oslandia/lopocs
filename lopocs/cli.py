@@ -97,15 +97,17 @@ def serve():
 @click.option('--column', help="column name to store patches", default="points", type=str)
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where temporary files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
+@click.option('--capacity', type=int, default=400, help="number of points in a pcpatch")
 @click.option('--potree', type=bool, help="create an potree demo page", is_flag=True)
+@click.option('--cesium', type=bool, help="create an cesium demo page", is_flag=True)
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
-def load(filename, table, column, work_dir, server_url, potree):
+def load(filename, table, column, work_dir, server_url, capacity, potree=False, cesium=False):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
-    _load(filename, table, column, work_dir, server_url, potree)
+    _load(filename, table, column, work_dir, server_url, capacity, potree, cesium)
 
 
-def _load(filename, table, column, work_dir, server_url, potree):
+def _load(filename, table, column, work_dir, server_url, capacity, potree=False, cesium=False):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
     filename = Path(filename)
     work_dir = Path(work_dir)
@@ -174,7 +176,7 @@ def _load(filename, table, column, work_dir, server_url, potree):
     }},
     {{
         "type": "filters.chipper",
-        "capacity": "400"
+        "capacity": "{capacity}"
     }},
     {{
         "type": "filters.revertmorton"
@@ -251,26 +253,26 @@ def _load(filename, table, column, work_dir, server_url, potree):
         )
     )
 
-    pending("Building greyhound hierarchy")
-    new_hcy = greyhound.build_hierarchy_from_pg(
-        lpsession, lod_min, lod_max, bbox
-    )
-    greyhound.write_in_cache(new_hcy, cache_file)
-    ok()
-
-    pending("Building 3Dtiles tileset")
-    hcy = threedtiles.build_hierarchy_from_pg(
-        lpsession, server_url, lod_max, bbox, lod_min
-    )
-
-    tileset = os.path.join(str(work_dir.resolve()), 'tileset.json')
-
-    with io.open(tileset, 'wb') as out:
-        out.write(hcy.encode())
-    ok()
-
     if potree:
+        pending("Building greyhound hierarchy")
+        new_hcy = greyhound.build_hierarchy_from_pg(
+            lpsession, lod_min, lod_max, bbox
+        )
+        greyhound.write_in_cache(new_hcy, cache_file)
+        ok()
         create_potree_page(str(work_dir.resolve()), server_url, table, column)
+
+    if cesium:
+        pending("Building 3Dtiles tileset")
+        hcy = threedtiles.build_hierarchy_from_pg(
+            lpsession, server_url, lod_max, bbox, lod_min
+        )
+
+        tileset = os.path.join(str(work_dir.resolve()), 'tileset.json')
+
+        with io.open(tileset, 'wb') as out:
+            out.write(hcy.encode())
+        ok()
 
 
 def create_potree_page(work_dir, server_url, tablename, column):
@@ -297,18 +299,21 @@ def create_potree_page(work_dir, server_url, tablename, column):
 @click.option('--sample', help="sample data available", default="airport", type=click.Choice(samples.keys()))
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
-def demo(sample, work_dir, server_url):
+@click.option('--potree', type=bool, help="create an potree demo page", is_flag=True)
+@click.option('--cesium', type=bool, help="create an cesium demo page", is_flag=True)
+def demo(sample, work_dir, server_url, potree, cesium):
     '''
     download sample lidar data, load it into your and visualize in potree viewer
     '''
     filepath = Path(samples[sample])
+    pending('Using sample data {}: {}'.format(sample, filepath.name), nl=True)
     dest = os.path.join(work_dir, filepath.name)
 
     if not os.path.exists(dest):
         download('Downloading sample', samples[sample], dest)
 
     # now load data
-    _load(dest, sample, 'points', work_dir, server_url, True)
+    _load(dest, sample, 'points', work_dir, server_url, 400, potree=potree, cesium=cesium)
 
     click.echo('Now launch lopocs with "lopocs serve" and open the file {}.html in your favorite browser'.format(sample))
 
