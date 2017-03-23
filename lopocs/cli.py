@@ -286,9 +286,11 @@ def create_potree_page(work_dir, server_url, tablename, column):
         # unzipping content
         with ZipFile(potreezip) as myzip:
             myzip.extractall(path=work_dir)
-    pending('Creating a potree demo page : {}.html'.format(tablename))
+    tablewschema = tablename.split('.')[-1]
+    sample_page = os.path.join(work_dir, '{}.html'.format(tablewschema))
+    abs_sample_page = str(Path(sample_page).resolve())
+    pending('Creating a potree demo page : file://{}'.format(abs_sample_page))
     resource = '{}.{}'.format(tablename, column)
-    sample_page = os.path.join(work_dir, '{}.html'.format(tablename))
     server_url = server_url.replace('http://', '')
     with io.open(sample_page, 'wb') as html:
         html.write(potree_page.format(resource=resource, server_url=server_url).encode())
@@ -315,7 +317,10 @@ def demo(sample, work_dir, server_url, potree, cesium):
     # now load data
     _load(dest, sample, 'points', work_dir, server_url, 400, potree=potree, cesium=cesium)
 
-    click.echo('Now launch lopocs with "lopocs serve" and open the file {}.html in your favorite browser'.format(sample))
+    click.echo(
+        'Now you can start lopocs with "lopocs serve"'
+        .format(sample)
+    )
 
 
 def proj42epsg(proj4, epsg='/usr/share/proj/epsg', forceProj4=False):
