@@ -48,7 +48,6 @@ def ThreeDTilesRead(table, column, offsets, scale, bounds, lod):
     for output in session.lopocstable.outputs:
         if requested == [output['scales'], output['offsets']]:
             pcid = output['pcid']
-        print(requested)
     if not pcid:
         pcid, bbox = session.add_output_schema(
             session.table, session.column,
