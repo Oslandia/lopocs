@@ -225,11 +225,6 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
         table, column, srid, scale_x, scale_y, scale_z,
         offset_x, offset_y, offset_z
     )
-    # add schema currently used by potree (version 1.5RC)
-    Session.add_output_schema(
-        table, column, 0.01, 0.01, 0.01,
-        offset_x, offset_y, offset_z, srid, potree_schema
-    )
     lpsession = Session(table, column)
     ok()
 
@@ -254,6 +249,11 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
     )
 
     if potree:
+        # add schema currently used by potree (version 1.5RC)
+        Session.add_output_schema(
+            table, column, 0.01, 0.01, 0.01,
+            offset_x, offset_y, offset_z, srid, potree_schema
+        )
         pending("Building greyhound hierarchy")
         new_hcy = greyhound.build_hierarchy_from_pg(
             lpsession, lod_min, lod_max, bbox
