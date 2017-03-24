@@ -288,7 +288,7 @@ def create_potree_page(work_dir, server_url, tablename, column):
             myzip.extractall(path=work_dir)
     tablewschema = tablename.split('.')[-1]
     sample_page = os.path.join(work_dir, '{}.html'.format(tablewschema))
-    abs_sample_page = str(Path(sample_page).resolve())
+    abs_sample_page = str(Path(sample_page).absolute())
     pending('Creating a potree demo page : file://{}'.format(abs_sample_page))
     resource = '{}.{}'.format(tablename, column)
     server_url = server_url.replace('http://', '')
