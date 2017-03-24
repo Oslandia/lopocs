@@ -151,12 +151,6 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
     offset_y = round(offset_y, 2)
     offset_z = round(offset_z, 2)
 
-    if extension == 'e57':
-        # summary gives empty results for this format
-        offset_x = 0
-        offset_y = 0
-        offset_z = 0
-        scale_x, scale_y, scale_z = (1, 1, 1)
 
     pg_host = app.config['PG_HOST']
     pg_name = app.config['PG_NAME']
