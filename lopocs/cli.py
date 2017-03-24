@@ -27,8 +27,6 @@ app = create_app()
 
 samples = {
     'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
-    # e57 reader not yet ready
-    # 'stsulpice': 'https://freefr.dl.sourceforge.net/project/e57-3d-imgfmt/E57Example-data/Trimble_StSulpice-Cloud-50mm.e57',
     'sthelens': 'http://www.liblas.org/samples/st-helens.las'
 }
 
