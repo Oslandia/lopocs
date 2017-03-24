@@ -303,7 +303,7 @@ def create_potree_page(work_dir, server_url, tablename, column):
 @click.option('--cesium', type=bool, help="create an cesium demo page", is_flag=True)
 def demo(sample, work_dir, server_url, potree, cesium):
     '''
-    download sample lidar data, load it into your and visualize in potree viewer
+    download sample lidar data, load it into pgpointcloud
     '''
     filepath = Path(samples[sample])
     pending('Using sample data {}: {}'.format(sample, filepath.name), nl=True)
