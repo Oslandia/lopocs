@@ -308,6 +308,13 @@ class Session():
         Create some meta tables that stores informations used by lopocs to
         stream patches in various formats
         '''
+        # to_regclass function changed its signature in postgresql >= 9.6
+        version = cls.query('show server_version')[0][0]
+        if version < '9.6.0':
+            cls.execute("""
+                create or replace function to_regclass(text) returns regclass
+                language sql as 'select to_regclass($1::cstring)'
+            """)
         cls.execute(LOPOCS_TABLES_QUERY)
 
     @classmethod
