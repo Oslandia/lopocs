@@ -22,8 +22,6 @@ from lopocs.database import Session
 from lopocs.potreeschema import potree_schema
 from lopocs.potreeschema import potree_page
 
-# intialize flask application
-app = create_app()
 
 samples = {
     'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
@@ -87,6 +85,7 @@ def cli():
 @cli.command()
 def serve():
     '''run lopocs server (development usage)'''
+    app = create_app()
     CORS(app)
     app.run()
 
@@ -107,6 +106,9 @@ def load(filename, table, column, work_dir, server_url, capacity, potree=False, 
 
 def _load(filename, table, column, work_dir, server_url, capacity, potree=False, cesium=False):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
+    # intialize flask application
+    app = create_app()
+
     filename = Path(filename)
     work_dir = Path(work_dir)
     extension = filename.suffix[1:].lower()
