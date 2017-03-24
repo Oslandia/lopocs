@@ -37,7 +37,7 @@ def create_app(env='Defaults'):
         try:
             cfgfile = (Path(__file__).parent / '..' / 'conf' / 'lopocs.yml').resolve()
         except FileNotFoundError:
-            app.logger.warning('no config file found !!')
+            app.logger.critical('no config file found !!')
             sys.exit(1)
     app.config.update(load_yaml_config(str(cfgfile)))
 
