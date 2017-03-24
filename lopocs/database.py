@@ -41,6 +41,11 @@ create table if not exists pointcloud_lopocs_outputs (
 -- only one schema is used to store patches
 create unique index if not exists uniqidx_pcid_stored
     on pointcloud_lopocs_outputs (id, pcid, stored) where (stored is true);
+
+-- used to clean pointcloud_lopocs table when referenced table no longer exists
+create or replace function clean_lopocs() returns void
+language sql as
+'delete from pointcloud_lopocs where to_regclass(schematable) is null';
 """
 
 # get a list of outputs formats available
