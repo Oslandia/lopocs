@@ -5,7 +5,33 @@ import codecs
 import os
 import decimal
 
+import numpy
+from lazperf import buildNumpyDescription, Decompressor
+
 from .conf import Config
+
+
+def decompress(points, schema):
+    """
+    'points' is a pcpatch in wkb
+    """
+
+    # retrieve number of points in wkb pgpointcloud patch
+    npoints = npoints_from_wkb_pcpatch(points)
+    hexbuffer = hexdata_from_wkb_pcpatch(points)
+    hexbuffer += hexa_signed_int32(npoints)
+
+    # uncompress
+    s = json.dumps(schema).replace("\\", "")
+    dtype = buildNumpyDescription(json.loads(s))
+    lazdata = bytes(hexbuffer)
+
+    arr = numpy.fromstring(lazdata, dtype=numpy.uint8)
+    d = Decompressor(arr, s)
+    output = numpy.zeros(npoints * dtype.itemsize, dtype=numpy.uint8)
+    decompressed = d.decompress(output)
+
+    return decompressed
 
 
 def greyhound_types(typ):

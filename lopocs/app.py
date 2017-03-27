@@ -142,8 +142,6 @@ class ThreeDTilesInfoRoute(Resource):
 threedtiles_read = reqparse.RequestParser()
 threedtiles_read.add_argument('bounds', type=str, required=True)
 threedtiles_read.add_argument('lod', type=int, required=True)
-threedtiles_read.add_argument('offsets', type=str, required=True)
-threedtiles_read.add_argument('scale', type=float, required=True)
 
 
 @threedtiles_ns.route("/<resource>/read.pnts")
@@ -155,6 +153,6 @@ class ThreeDTilesReadRoute(Resource):
         args = threedtiles_read.parse_args()
         return ThreeDTilesRead(
             table, column,
-            args.get('offsets'), args.get('scale'),
-            args.get('bounds'), args.get('lod')
+            args.get('bounds'),
+            args.get('lod')
         )

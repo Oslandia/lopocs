@@ -24,6 +24,7 @@ requirements = (
     'requests==2.13.0',
     'lazperf==0.1',
     'numpy',
+    'pyproj==1.9.5.1'
 )
 
 dev_requirements = (

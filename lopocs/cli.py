@@ -15,17 +15,20 @@ import click
 import requests
 from osgeo.osr import SpatialReference
 from flask_cors import CORS
+from pyproj import Proj, transform
 
 from lopocs import __version__
 from lopocs import create_app, greyhound, threedtiles
 from lopocs.database import Session
 from lopocs.potreeschema import potree_schema
 from lopocs.potreeschema import potree_page
+from lopocs.cesium import cesium_page
 
 
 samples = {
     'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
-    'sthelens': 'http://www.liblas.org/samples/st-helens.las'
+    'sthelens': 'http://www.liblas.org/samples/st-helens.las',
+    'grandlyon': 'https://download.data.grandlyon.com/files/grandlyon/imagerie/mnt2015/lidar/1842_5175.zip'
 }
 
 
@@ -161,16 +164,16 @@ def check():
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where temporary files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 @click.option('--capacity', type=int, default=400, help="number of points in a pcpatch")
-@click.option('--potree', type=bool, help="create an potree demo page", is_flag=True)
-@click.option('--cesium', type=bool, help="create an cesium demo page", is_flag=True)
+@click.option('--potree', 'usewith', help="load data for use with greyhound/potree", flag_value='potree')
+@click.option('--cesium', 'usewith', help="load data for use with use 3dtiles/cesium ", default=True, flag_value='cesium')
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
-def load(filename, table, column, work_dir, server_url, capacity, potree=False, cesium=False):
+def load(filename, table, column, work_dir, server_url, capacity, usewith):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
-    _load(filename, table, column, work_dir, server_url, capacity, potree, cesium)
+    _load(filename, table, column, work_dir, server_url, capacity, usewith)
 
 
-def _load(filename, table, column, work_dir, server_url, capacity, potree=False, cesium=False):
+def _load(filename, table, column, work_dir, server_url, capacity, usewith):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
     # intialize flask application
     app = create_app()
@@ -213,10 +216,26 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
     offset_y = summary['bounds']['Y']['min'] + (summary['bounds']['Y']['max'] - summary['bounds']['Y']['min']) / 2
     offset_z = summary['bounds']['Z']['min'] + (summary['bounds']['Z']['max'] - summary['bounds']['Z']['min']) / 2
 
+    reproject = ""
+    srid = proj42epsg(summary['srs']['proj4'])
+
+    if usewith == 'cesium':
+        # cesium only use epsg:4978, so we must reproject before loading into pg
+        from_srid = proj42epsg(summary['srs']['proj4'])
+        srid = 4978
+        pini = Proj(init='epsg:{}'.format(from_srid))
+        pout = Proj(init='epsg:{}'.format(srid))
+        offset_x, offset_y, offset_z = transform(pini, pout, offset_x, offset_y, offset_z)
+        reproject = """
+        {{
+           "type":"filters.reprojection",
+           "in_srs":"EPSG:{from_srid}",
+           "out_srs":"EPSG:{srid}"
+        }},""".format(**locals())
+
     offset_x = round(offset_x, 2)
     offset_y = round(offset_y, 2)
     offset_z = round(offset_z, 2)
-
 
     pg_host = app.config['PG_HOST']
     pg_name = app.config['PG_NAME']
@@ -225,7 +244,6 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
     pg_password = app.config['PG_PASSWORD']
     realfilename = str(filename.resolve())
     schema, tab = table.split('.')
-    srid = proj42epsg(summary['srs']['proj4'])
 
     json_pipeline = """
 {{
@@ -238,6 +256,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
         "type": "filters.chipper",
         "capacity": "{capacity}"
     }},
+    {reproject}
     {{
         "type": "filters.revertmorton"
     }},
@@ -298,21 +317,21 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
         fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
         fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']
     ]
-    cache_file = (
-        "{0}_{1}_{2}_{3}_{4}.hcy".format(
-            lpsession.table,
-            lpsession.column,
-            lod_min,
-            lod_max,
-            '_'.join(str(e) for e in bbox)
-        )
-    )
 
-    if potree:
+    if usewith == 'potree':
         # add schema currently used by potree (version 1.5RC)
         Session.add_output_schema(
             table, column, 0.01, 0.01, 0.01,
             offset_x, offset_y, offset_z, srid, potree_schema
+        )
+        cache_file = (
+            "{0}_{1}_{2}_{3}_{4}.hcy".format(
+                lpsession.table,
+                lpsession.column,
+                lod_min,
+                lod_max,
+                '_'.join(str(e) for e in bbox)
+            )
         )
         pending("Building greyhound hierarchy")
         new_hcy = greyhound.build_hierarchy_from_pg(
@@ -322,7 +341,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
         ok()
         create_potree_page(str(work_dir.resolve()), server_url, table, column)
 
-    if cesium:
+    if usewith == 'cesium':
         pending("Building 3Dtiles tileset")
         hcy = threedtiles.build_hierarchy_from_pg(
             lpsession, server_url, lod_max, bbox, lod_min
@@ -333,6 +352,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, potree=False,
         with io.open(tileset, 'wb') as out:
             out.write(hcy.encode())
         ok()
+        create_cesium_page(str(work_dir.resolve()), table, column)
 
 
 def create_potree_page(work_dir, server_url, tablename, column):
@@ -347,7 +367,7 @@ def create_potree_page(work_dir, server_url, tablename, column):
         with ZipFile(potreezip) as myzip:
             myzip.extractall(path=work_dir)
     tablewschema = tablename.split('.')[-1]
-    sample_page = os.path.join(work_dir, '{}.html'.format(tablewschema))
+    sample_page = os.path.join(work_dir, 'potree-{}.html'.format(tablewschema))
     abs_sample_page = str(Path(sample_page).absolute())
     pending('Creating a potree demo page : file://{}'.format(abs_sample_page))
     resource = '{}.{}'.format(tablename, column)
@@ -357,13 +377,33 @@ def create_potree_page(work_dir, server_url, tablename, column):
     ok()
 
 
+def create_cesium_page(work_dir, tablename, column):
+    '''Create an html demo page with cesium viewer
+    '''
+    cesium = os.path.join(work_dir, 'cesium')
+    cesiumzip = os.path.join(work_dir, 'cesium.zip')
+    if not os.path.exists(cesium):
+        download('Getting cesium code', 'http://3d.oslandia.com/cesium.zip', cesiumzip)
+        # unzipping content
+        with ZipFile(cesiumzip) as myzip:
+            myzip.extractall(path=work_dir)
+    tablewschema = tablename.split('.')[-1]
+    sample_page = os.path.join(work_dir, 'cesium-{}.html'.format(tablewschema))
+    abs_sample_page = str(Path(sample_page).absolute())
+    pending('Creating a cesium demo page : file://{}'.format(abs_sample_page))
+    resource = '{}.{}'.format(tablename, column)
+    with io.open(sample_page, 'wb') as html:
+        html.write(cesium_page.format(resource=resource).encode())
+    ok()
+
+
 @cli.command()
 @click.option('--sample', help="sample data available", default="airport", type=click.Choice(samples.keys()))
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
-@click.option('--potree', type=bool, help="create an potree demo page", is_flag=True)
-@click.option('--cesium', type=bool, help="create an cesium demo page", is_flag=True)
-def demo(sample, work_dir, server_url, potree, cesium):
+@click.option('--potree', 'usewith', help="load data for use with greyhound/potree", flag_value='potree')
+@click.option('--cesium', 'usewith', help="load data for use with use 3dtiles/cesium ", default=True, flag_value='cesium')
+def demo(sample, work_dir, server_url, usewith):
     '''
     download sample lidar data, load it into pgpointcloud
     '''
@@ -375,7 +415,7 @@ def demo(sample, work_dir, server_url, potree, cesium):
         download('Downloading sample', samples[sample], dest)
 
     # now load data
-    _load(dest, sample, 'points', work_dir, server_url, 400, potree=potree, cesium=cesium)
+    _load(dest, sample, 'points', work_dir, server_url, 400, usewith)
 
     click.echo(
         'Now you can start lopocs with "lopocs serve"'

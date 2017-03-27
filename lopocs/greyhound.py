@@ -4,8 +4,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import make_response
-import numpy
-from lazperf import buildNumpyDescription, Decompressor
 
 from .database import Session
 from .utils import (
@@ -524,31 +522,3 @@ def build_hierarchy_from_pg_single(session, lod, lod_max, bbox):
             hierarchy['seu'] = h_seu
 
     return hierarchy
-
-
-def decompress(points, schema):
-    """
-    'points' is a pcpatch in wkb
-    """
-
-    # retrieve number of points in wkb pgpointcloud patch
-    npoints = npoints_from_wkb_pcpatch(points)
-    hexbuffer = hexdata_from_wkb_pcpatch(points)
-    hexbuffer += hexa_signed_int32(npoints)
-
-    # uncompress
-    s = json.dumps(schema).replace("\\", "")
-    # s = json.dumps(GreyhoundReadSchema().json()).replace("\\", "")
-    dtype = buildNumpyDescription(json.loads(s))
-
-    lazdata = bytes(hexbuffer)
-
-    arr = numpy.fromstring(lazdata, dtype=numpy.uint8)
-    d = Decompressor(arr, s)
-    output = numpy.zeros(npoints * dtype.itemsize, dtype=numpy.uint8)
-    decompressed = d.decompress(output)
-    print('point size', dtype.itemsize)
-    print('X: ', decompressed['X'][0], 'Y: ', decompressed['Y'][0], 'Z: ', decompressed['Z'][0])
-
-    decompressed_str = numpy.ndarray.tostring(decompressed)
-    return [decompressed_str, dtype.itemsize]
