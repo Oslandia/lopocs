@@ -9,7 +9,7 @@ import json
 from zipfile import ZipFile
 from datetime import datetime
 from pathlib import Path
-from subprocess import check_call, check_output, CalledProcessError, DEVNULL
+from subprocess import check_call, call, check_output, CalledProcessError, DEVNULL
 
 import click
 import requests
@@ -42,11 +42,19 @@ def pending(msg, nl=False):
     ), nl=nl)
 
 
+def green(message):
+    click.secho(message.replace('\n', ''), fg='green')
+
+
 def ok(mess=None):
-    click.secho('ok: {}'.format(mess) if mess else 'ok', fg='green')
+    if mess:
+        click.secho('{} : '.format(mess.replace('\n', '')), nl=False)
+    click.secho('ok', fg='green')
 
 
-def ko():
+def ko(mess=None):
+    if mess:
+        click.secho('{} : '.format(mess.replace('\n', '')), nl=False)
     click.secho('ko', fg='red')
 
 
@@ -88,6 +96,64 @@ def serve():
     app = create_app()
     CORS(app)
     app.run()
+
+
+def cmd_rt(message, command):
+    '''wrapper around call function
+    '''
+    click.echo('{} ... '.format(message), nl=False)
+    rt = call(command, shell=True)
+    if rt != 0:
+        ko()
+        return
+    ok()
+
+
+def cmd_output(message, command):
+    '''wrapper check_call function
+    '''
+    click.echo('{} ... '.format(message), nl=False)
+    try:
+        output = check_output(shlex.split(command)).decode()
+        green(output)
+    except Exception as exc:
+        ko(str(exc))
+
+
+def cmd_pg(message, request):
+    '''wrapper around a session query
+    '''
+    click.echo('{} ... '.format(message), nl=False)
+    try:
+        result = Session.query(request)
+        if not result:
+            raise Exception('Not found')
+        green(result[0][0])
+    except Exception as exc:
+        ko(str(exc))
+
+
+@cli.command()
+def check():
+    '''check lopocs configuration and dependencies'''
+    try:
+        app = create_app()
+    except Exception as exc:
+        fatal(str(exc))
+
+    if not app:
+        fatal("it appears that you don't have any configuration file")
+
+    # pdal
+    cmd_output('Pdal', 'pdal-config --version')
+    cmd_rt('Pdal plugin pgpointcloud', "test -e `pdal-config --plugin-dir`/libpdal_plugin_writer_pgpointcloud.so")
+    cmd_rt('Pdal plugin revertmorton', "test -e `pdal-config --plugin-dir`/libpdal_plugin_filter_revertmorton.so")
+
+    # postgresql and extensions
+    cmd_pg('PostgreSQL', 'show server_version')
+    cmd_pg('PostGIS extension', "select default_version from pg_available_extensions where name = 'postgis'")
+    cmd_pg('PgPointcloud extension', "select default_version from pg_available_extensions where name = 'pointcloud'")
+    cmd_pg('PgPointcloud-PostGIS extension', "select default_version from pg_available_extensions where name = 'pointcloud_postgis'")
 
 
 @click.option('--table', required=True, help='table name to store pointclouds, considered in public schema if no prefix provided')
