@@ -150,7 +150,7 @@ class Session():
 
     ``catalog`` contains lopocs table cache
     catalog  = {
-        ('public.table'): LopocsTableInstance
+        ('public.table', 'column'): <LopocsTable> object
     }
     """
     db = None
