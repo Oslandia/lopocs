@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 from struct import pack, unpack
-import codecs
+from binascii import unhexlify
 import os
 import decimal
 
@@ -124,8 +124,8 @@ def hexa_signed_uint8(val):
 
 def npoints_from_wkb_pcpatch(pcpatch_wkb):
     npoints_hexa = pcpatch_wkb[18:26]
-    return unpack("I", codecs.decode(npoints_hexa, "hex"))[0]
+    return unpack("I", unhexlify(npoints_hexa))[0]
 
 
 def hexdata_from_wkb_pcpatch(pcpatch_wkb):
-    return codecs.decode(pcpatch_wkb[34:], "hex")
+    return unhexlify(pcpatch_wkb[34:])
