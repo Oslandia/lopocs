@@ -347,7 +347,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith):
             lpsession, server_url, lod_max, bbox, lod_min
         )
 
-        tileset = os.path.join(str(work_dir.resolve()), 'tileset.json')
+        tileset = os.path.join(str(work_dir.resolve()), 'tileset-{}.{}.json'.format(table, column))
 
         with io.open(tileset, 'wb') as out:
             out.write(hcy.encode())
@@ -408,8 +408,9 @@ def demo(sample, work_dir, server_url, usewith):
     download sample lidar data, load it into pgpointcloud
     '''
     filepath = Path(samples[sample])
-    pending('Using sample data {}: {}'.format(sample, filepath.name), nl=True)
+    pending('Using sample data {}: {}'.format(sample, filepath.name))
     dest = os.path.join(work_dir, filepath.name)
+    ok()
 
     if not os.path.exists(dest):
         download('Downloading sample', samples[sample], dest)

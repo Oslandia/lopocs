@@ -25,7 +25,7 @@ cesium_page = """
 
     var viewer = new Cesium.Viewer('cesiumContainer');
     var tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({{
-      url : 'tileset.json'
+      url : 'tileset-{resource}.json'
     }}));
 
     tileset.readyPromise.then(function() {{
