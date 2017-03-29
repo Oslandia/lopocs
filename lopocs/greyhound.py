@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import time
+from binascii import unhexlify
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import make_response
@@ -9,7 +10,7 @@ from .database import Session
 from .utils import (
     list_from_str, read_in_cache,
     write_in_cache, boundingbox_to_polygon,
-    npoints_from_wkb_pcpatch, hexdata_from_wkb_pcpatch, hexa_signed_int32
+    patch_nbpoints_laz, hexa_signed_int32
 )
 from .conf import Config
 from .stats import Stats
@@ -356,10 +357,10 @@ def get_points(session, box, schema_pcid, lod):
         # decompress(pcpatch_wkb, schema)
 
         # retrieve number of points in wkb pgpointcloud patch
-        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = patch_nbpoints_laz(pcpatch_wkb)
 
         # extract data
-        hexbuffer = hexdata_from_wkb_pcpatch(pcpatch_wkb)
+        hexbuffer = unhexlify(pcpatch_wkb[34:])
 
         # add number of points
         hexbuffer += hexa_signed_int32(npoints)
@@ -402,7 +403,7 @@ def build_hierarchy_from_pg(session, lod, lod_max, bbox):
 
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = patch_nbpoints_laz(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1
@@ -455,7 +456,7 @@ def build_hierarchy_from_pg_single(session, lod, lod_max, bbox):
     pcpatch_wkb = session.query(sql)[0][0]
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = patch_nbpoints_laz(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1

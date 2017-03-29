@@ -5,20 +5,63 @@ from binascii import unhexlify
 import os
 import decimal
 
-import numpy
+import numpy as np
 from lazperf import buildNumpyDescription, Decompressor
 
 from .conf import Config
 
 
+numpy_types_map = {
+    ('unsigned', 1): np.uint8,
+    ('unsigned', 2): np.uint16,
+    ('unsigned', 4): np.uint32,
+    ('signed', 2): np.int16,
+    ('signed', 4): np.int32,
+    ('floating', 4): np.float32,
+    ('floating', 8): np.float64,
+}
+
+
+def schema_dtype(schema):
+    '''Given a patch schema (greyhound like schema)
+    convert it into a numpy dtype description
+    http://docs.scipy.org/doc/numpy/reference/generated/numpy.dtype.html
+    '''
+    formats = [
+        numpy_types_map[(dim['type'], dim['size'])]
+        for dim in schema
+    ]
+
+    return np.dtype({'names': [dim['name'] for dim in schema], 'formats': formats})
+
+
+def read_uncompressed_patch(pcpatch_wkb, schema):
+    '''
+    Patch binary structure uncompressed:
+    byte:         endianness (1 = NDR, 0 = XDR)
+    uint32:       pcid (key to POINTCLOUD_SCHEMAS)
+    uint32:       0 = no compression
+    uint32:       npoints
+    pointdata[]:  interpret relative to pcid
+    '''
+    patchbin = unhexlify(pcpatch_wkb)
+    npoints = unpack("I", patchbin[9:13])[0]
+    dt = schema_dtype(schema)
+    patch = np.fromstring(patchbin[13:], dtype=dt)
+    # debug
+    # print(patch[:10])
+    return patch, npoints
+
+
 def decompress(points, schema):
     """
+    Decode patch encoded with lazperf.
     'points' is a pcpatch in wkb
     """
 
     # retrieve number of points in wkb pgpointcloud patch
-    npoints = npoints_from_wkb_pcpatch(points)
-    hexbuffer = hexdata_from_wkb_pcpatch(points)
+    npoints = patch_nbpoints_laz(points)
+    hexbuffer = unhexlify(points[34:])
     hexbuffer += hexa_signed_int32(npoints)
 
     # uncompress
@@ -26,9 +69,9 @@ def decompress(points, schema):
     dtype = buildNumpyDescription(json.loads(s))
     lazdata = bytes(hexbuffer)
 
-    arr = numpy.fromstring(lazdata, dtype=numpy.uint8)
+    arr = np.fromstring(lazdata, dtype=np.uint8)
     d = Decompressor(arr, s)
-    output = numpy.zeros(npoints * dtype.itemsize, dtype=numpy.uint8)
+    output = np.zeros(npoints * dtype.itemsize, dtype=np.uint8)
     decompressed = d.decompress(output)
 
     return decompressed
@@ -122,10 +165,13 @@ def hexa_signed_uint8(val):
     return pack('B', val)
 
 
-def npoints_from_wkb_pcpatch(pcpatch_wkb):
+def patch_nbpoints_unc(pcpatch_wkb):
+    '''get number of points in a uncompressed patch
+    '''
     npoints_hexa = pcpatch_wkb[18:26]
     return unpack("I", unhexlify(npoints_hexa))[0]
 
 
-def hexdata_from_wkb_pcpatch(pcpatch_wkb):
-    return unhexlify(pcpatch_wkb[34:])
+def patch_nbpoints_laz(pcpatch_wkb):
+    npoints_hexa = pcpatch_wkb[18:26]
+    return unpack("I", unhexlify(npoints_hexa))[0]

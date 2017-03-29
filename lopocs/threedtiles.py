@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 import json
 import numpy as np
-import py3dtiles
 from flask import make_response
 
-from . import utils
-from .utils import decompress
+from py3dtiles.feature_table import (FeatureTableHeader, FeatureTableBody, FeatureTable)
+from py3dtiles.tile import TileBody, TileHeader, Tile
+
+from .utils import (
+    read_uncompressed_patch, boundingbox_to_polygon, list_from_str, patch_nbpoints_unc
+)
 from .conf import Config
 from .database import Session
 
@@ -36,8 +39,8 @@ def ThreeDTilesInfo(table, column):
 def ThreeDTilesRead(table, column, bounds, lod):
 
     session = Session(table, column)
-    # offsets = [round(off, 2) for off in utils.list_from_str(offsets)]
-    box = utils.list_from_str(bounds)
+    # offsets = [round(off, 2) for off in list_from_str(offsets)]
+    box = list_from_str(bounds)
     # requested = [scales, offsets]
     stored_patches = session.lopocstable.filter_stored_output()
     schema = stored_patches['point_schema']
@@ -57,78 +60,54 @@ def ThreeDTilesRead(table, column, bounds, lod):
     response.headers['content-type'] = 'application/octet-stream'
     return response
 
+# FIXME: change pdt type in case of quantized values
+cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8)])
+pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
 
-pdt = np.dtype([('X', '<f4'), ('Y', '<f4'), ('Z', '<f4')])
-cdt = np.dtype([('Red', 'u1'), ('Green', 'u1'), ('Blue', 'u1')])
 
-
+# @profile
 def get_points(session, box, lod, offsets, pcid, scales, schema):
     sql = sql_query(session, box, pcid, lod)
     if Config.DEBUG:
         print(sql)
 
     pcpatch_wkb = session.query(sql)[0][0]
-    npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+    points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
 
-    # extract data
-    decompressed = decompress(pcpatch_wkb, schema)
+    quantized_points_r = np.c_[points['X'] * scales[0], points['Y'] * scales[1], points['Z'] * scales[2]]
+    quantized_points = np.array(np.core.records.fromarrays(quantized_points_r.T, dtype=pdt))
+    rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
+    rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
 
-    features = []
-    for point in decompressed:
-        # print(point['X'], point['Y'], point['Z'])
-        pos_arr = np.array([(point['X'] * scales[0], point['Y'] * scales[1], point['Z'] * scales[1])], dtype=pdt).view('uint8')
-        col_arr = np.array([(point['Red'] % 255, point['Green'] % 255, point['Blue'] % 255)], dtype=cdt).view('uint8')
-        feat = py3dtiles.Feature.from_array(pdt, pos_arr, cdt, col_arr)
-        features.append(feat)
+    fth = FeatureTableHeader.from_dtype(
+        quantized_points.dtype, rgb.dtype, npoints,
+        # quantized_volume_offset=offsets,
+        # quantized_volume_scale=scales
+    )
+    ftb = FeatureTableBody()
+    ftb.positions_itemsize = fth.positions_dtype.itemsize
+    ftb.colors_itemsize = fth.colors_dtype.itemsize
+    ftb.positions_arr = quantized_points.view(np.uint8)
+    ftb.colors_arr = rgb.view(np.uint8)
 
-    # features = []
-    # for i in range(0, npoints):
-    #     point = decompressed_str[itemsize * i:itemsize * (i + 1)]
-    #     x = point[0:4]
-    #     y = point[4:8]
-    #     z = point[8:12]
-    #     xd = struct.unpack("i", x)[0]
-    #     yd = struct.unpack("i", y)[0]
-    #     zd = struct.unpack("i", z)[0]
+    ft = FeatureTable()
+    ft.header = fth
+    ft.body = ftb
 
-    #     # if Config.CESIUM_COLOR == "classif":
-    #     #     classif = point[14:15]
-    #     #     classifd = struct.unpack("B", classif)[0]
-    #     #     if classifd == 2:  # ground
-    #     #         col_arr = np.array([(51, 25, 0)], dtype=cdt).view('uint8')
-    #     #     elif classifd == 6:  # buildings
-    #     #         col_arr = np.array([(153, 76, 0)], dtype=cdt).view('uint8')
-    #     #     elif classifd == 5:  # vegetation
-    #     #         col_arr = np.array([(51, 102, 0)], dtype=cdt).view('uint8')
-    #     elif Config.CESIUM_COLOR == "colors":
-    #         r = point[15:17]
-    #         g = point[17:19]
-    #         b = point[19:21]
-    #         rd = struct.unpack("H", r)[0] % 255
-    #         gd = struct.unpack("H", g)[0] % 255
-    #         bd = struct.unpack("H", b)[0] % 255
-    #         col_arr = np.array([(rd, gd, bd)], dtype=cdt).view('uint8')
-    #     else:
-    #         col_arr = np.array([(0, 0, 0)], dtype=cdt).view('uint8')
-
-    #     xfin = xd * scales[0]
-    #     yfin = yd * scales[1]
-    #     zfin = zd * scales[2]
-    #     # print(np.array([(xfin, yfin, zfin)], dtype=pdt))
-    #     print(xfin, yfin, zfin)
-    #     pos_arr = np.array([(xfin, yfin, zfin)], dtype=pdt).view('uint8')
-    #     feat = py3dtiles.Feature.from_array(pdt, pos_arr, cdt, col_arr)
-    #     features.append(feat)
-
-        # print(pos_arr, col_arr)
-    tile = py3dtiles.Tile.from_features(pdt, cdt, features)
+    # tile
+    tb = TileBody()
+    tb.feature_table = ft
+    th = TileHeader()
+    tile = Tile()
+    tile.body = tb
+    tile.header = th
     tile.body.feature_table.header.rtc = offsets
 
     return [tile, npoints]
 
 
 def sql_query(session, box, pcid, lod, hierarchy=False):
-    poly = utils.boundingbox_to_polygon(box)
+    poly = boundingbox_to_polygon(box)
 
     maxppp = session.lopocstable.max_points_per_patch
 
@@ -167,9 +146,9 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
                            box[2] - 0.1, box[5] + 0.1, sql_limit,
                            pcid))
         else:
-            sql = ("select pc_compress(pc_setpcid(pc_union("
+            sql = ("select pc_union("
                    "pc_filterbetween( "
-                   "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), {9}), 'laz') from "
+                   "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )) from "
                    "(select {0} from {1} "
                    "where pc_intersects({0}, st_geomfromtext('polygon (("
                    "{2}))',{3})) order by morton {8})_;"
@@ -290,7 +269,7 @@ def children(session, baseurl, lod_max, offsets, bbox, lod, pcid):
 
     json_me = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = utils.npoints_from_wkb_pcpatch(pcpatch_wkb)
+        npoints = patch_nbpoints_unc(pcpatch_wkb)
         if npoints > 0:
             err = GEOMETRIC_ERROR_DEFAULT / (2 * (lod + 1))
             json_me = build_children_section(session, baseurl, offsets, bbox, err, lod)
