@@ -232,7 +232,7 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
 
     tileset["root"] = root
 
-    return json.dumps(tileset, indent=2, separators=(',', ': '))
+    return json.dumps(tileset)  # , indent=0, separators=(',', ': ')
 
 
 def build_children_section(session, baseurl, offsets, bbox, err, lod):
