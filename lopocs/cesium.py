@@ -24,9 +24,15 @@ cesium_page = """
   <script>
 
     var viewer = new Cesium.Viewer('cesiumContainer');
+
+    viewer.extend(Cesium.viewerCesium3DTilesInspectorMixin);
+    var inspectorViewModel = viewer.cesium3DTilesInspector.viewModel;
+
     var tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({{
       url : 'tileset-{resource}.json'
     }}));
+
+    inspectorViewModel.tileset = tileset;
 
     tileset.readyPromise.then(function() {{
           console.log('Loaded tileset');
