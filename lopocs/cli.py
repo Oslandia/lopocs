@@ -13,7 +13,6 @@ from subprocess import check_call, call, check_output, CalledProcessError, DEVNU
 
 import click
 import requests
-from osgeo.osr import SpatialReference
 from flask_cors import CORS
 from pyproj import Proj, transform
 
@@ -217,14 +216,17 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith):
     offset_z = summary['bounds']['Z']['min'] + (summary['bounds']['Z']['max'] - summary['bounds']['Z']['min']) / 2
 
     reproject = ""
-    srid = proj42epsg(summary['srs']['proj4'])
+    # find authority code in wkt string
+    srid = re.findall('EPSG","(\d+)"', summary['srs']['wkt'])[-1]
 
     if usewith == 'cesium':
+        from_srid = srid
         # cesium only use epsg:4978, so we must reproject before loading into pg
-        from_srid = proj42epsg(summary['srs']['proj4'])
         srid = 4978
+
         pini = Proj(init='epsg:{}'.format(from_srid))
         pout = Proj(init='epsg:{}'.format(srid))
+        # recompute offset
         offset_x, offset_y, offset_z = transform(pini, pout, offset_x, offset_y, offset_z)
         reproject = """
         {{
@@ -422,51 +424,3 @@ def demo(sample, work_dir, server_url, usewith):
         'Now you can start lopocs with "lopocs serve"'
         .format(sample)
     )
-
-
-def proj42epsg(proj4, epsg='/usr/share/proj/epsg', forceProj4=False):
-    ''' Transform a WKT string to an EPSG code
-
-    Arguments
-    ---------
-
-    proj4: proj4 string definition
-    epsg: the proj.4 epsg file (defaults to '/usr/local/share/proj/epsg')
-    forceProj4: whether to perform brute force proj4 epsg file check (last resort)
-
-    Returns: EPSG code
-
-    '''
-    code = '4326'
-    p_in = SpatialReference()
-    s = p_in.ImportFromProj4(proj4)
-    if s == 5:  # invalid WKT
-        return '%s' % code
-    if p_in.IsLocal() == 1:  # this is a local definition
-        return p_in.ExportToWkt()
-    if p_in.IsGeographic() == 1:  # this is a geographic srs
-        cstype = 'GEOGCS'
-    else:  # this is a projected srs
-        cstype = 'PROJCS'
-    an = p_in.GetAuthorityName(cstype)
-    ac = p_in.GetAuthorityCode(cstype)
-    if an is not None and ac is not None:  # return the EPSG code
-        return '%s' % p_in.GetAuthorityCode(cstype)
-    else:  # try brute force approach by grokking proj epsg definition file
-        p_out = p_in.ExportToProj4()
-        if p_out:
-            if forceProj4 is True:
-                return p_out
-            f = open(epsg)
-            for line in f:
-                if line.find(p_out) != -1:
-                    m = re.search('<(\\d+)>', line)
-                    if m:
-                        code = m.group(1)
-                        break
-            if code:  # match
-                return '%s' % code
-            else:  # no match
-                return '%s' % code
-        else:
-            return '%s' % code
