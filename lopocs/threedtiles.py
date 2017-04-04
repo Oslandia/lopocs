@@ -60,6 +60,7 @@ def ThreeDTilesRead(table, column, bounds, lod):
     response.headers['content-type'] = 'application/octet-stream'
     return response
 
+
 # FIXME: change pdt type in case of quantized values
 cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8)])
 pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
@@ -74,10 +75,15 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     pcpatch_wkb = session.query(sql)[0][0]
     points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
 
+    if max(points['Red']) > 255:
+        # normalize
+        rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
+        rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
+    else:
+        rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
+
     quantized_points_r = np.c_[points['X'] * scales[0], points['Y'] * scales[1], points['Z'] * scales[2]]
     quantized_points = np.array(np.core.records.fromarrays(quantized_points_r.T, dtype=pdt))
-    rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
-    rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
 
     fth = FeatureTableHeader.from_dtype(
         quantized_points.dtype, rgb.dtype, npoints,
@@ -134,28 +140,16 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
         sql_limit = " limit {0} ".format(maxppq)
 
     if Config.USE_MORTON:
-        if hierarchy:
-            sql = ("""select pc_union(pc_filterbetween(pc_range({0}, {4}, {5}), 'Z', {6}, {7} ))
-                   from
-                   (select {0} from {1}
-                   where pc_intersects({0}, st_geomfromtext('polygon ((
-                   {2}))',{3})) order by morton {8})_
-                   """
-                   .format(session.column, session.table,
-                           poly, session.srsid, range_min, range_max,
-                           box[2] - 0.1, box[5] + 0.1, sql_limit,
-                           pcid))
-        else:
-            sql = ("select pc_union("
-                   "pc_filterbetween( "
-                   "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )) from "
-                   "(select {0} from {1} "
-                   "where pc_intersects({0}, st_geomfromtext('polygon (("
-                   "{2}))',{3})) order by morton {8})_;"
-                   .format(session.column, session.table,
-                           poly, session.srsid, range_min, range_max,
-                           box[2] - 0.1, box[5] + 0.1, sql_limit,
-                           pcid))
+        sql = ("select pc_union("
+               "pc_filterbetween( "
+               "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )) from "
+               "(select {0} from {1} "
+               "where pc_intersects({0}, st_geomfromtext('polygon (("
+               "{2}))',{3})) order by morton {8})_;"
+               .format(session.column, session.table,
+                       poly, session.srsid, range_min, range_max,
+                       box[2] - 0.1, box[5] + 0.1, sql_limit,
+                       pcid))
     else:
         sql = ("select pc_compress(pc_setpcid(pc_union("
                "pc_filterbetween( "
@@ -170,6 +164,27 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
     return sql
 
 
+def buildbox(bbox):
+    width = bbox[3] - bbox[0]
+    depth = bbox[4] - bbox[1]
+    height = bbox[5] - bbox[2]
+    midx = bbox[0] + width / 2
+    midy = bbox[1] + depth / 2
+    midz = bbox[2] + height / 2
+
+    box = [midx, midy, midz]
+    box.append(width / 2.0)
+    box.append(0.0)
+    box.append(0.0)
+    box.append(0.0)
+    box.append(depth / 2.0)
+    box.append(0.0)
+    box.append(0.0)
+    box.append(0.0)
+    box.append(height / 2.0)
+    return box
+
+
 def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
 
     stored_patches = session.lopocstable.filter_stored_output()
@@ -180,7 +195,8 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
     tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT  # (lod_max + 2)*20 - (lod+1)*20
 
     bvol = {}
-    bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
+    # bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
+    bvol["box"] = buildbox(bbox)
 
     lod_str = "lod={0}".format(lod)
     bounds = ("bounds=[{0},{1},{2},{3},{4},{5}]"
@@ -201,8 +217,8 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
 
     lod = 1
     children_list = []
-    for bb in split_bbox(bbox, lod):
-        json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid)
+    for bb in split_bbox(bbox):
+        json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid, GEOMETRIC_ERROR_DEFAULT / 4)
         if len(json_children):
             children_list.append(json_children)
 
@@ -211,7 +227,7 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
 
     tileset["root"] = root
 
-    return json.dumps(tileset)  # , indent=0, separators=(',', ': ')
+    return json.dumps(tileset, indent=2, separators=(',', ': '))
 
 
 def build_children_section(session, baseurl, offsets, bbox, err, lod):
@@ -227,7 +243,8 @@ def build_children_section(session, baseurl, offsets, bbox, err, lod):
     url = "{0}?{1}&{2}".format(baseurl, lod, bounds)
 
     bvol = {}
-    bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
+    # bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
+    bvol["box"] = buildbox(bbox)
 
     cjson["boundingVolume"] = bvol
     cjson["geometricError"] = err
@@ -236,7 +253,7 @@ def build_children_section(session, baseurl, offsets, bbox, err, lod):
     return cjson
 
 
-def split_bbox(bbox, lod):
+def split_bbox(bbox):
     width = bbox[3] - bbox[0]
     length = bbox[4] - bbox[1]
     height = bbox[5] - bbox[2]
@@ -261,7 +278,7 @@ def split_bbox(bbox, lod):
             bbox_sed, bbox_seu]
 
 
-def children(session, baseurl, lod_max, offsets, bbox, lod, pcid):
+def children(session, baseurl, lod_max, offsets, bbox, lod, pcid, err):
 
     # run sql
     sql = sql_query(session, bbox, pcid, lod, True)
@@ -270,16 +287,16 @@ def children(session, baseurl, lod_max, offsets, bbox, lod, pcid):
     json_me = {}
     if lod <= lod_max and pcpatch_wkb:
         npoints = patch_nbpoints_unc(pcpatch_wkb)
+        # print(npoints)
         if npoints > 0:
-            err = GEOMETRIC_ERROR_DEFAULT / (2 * (lod + 1))
             json_me = build_children_section(session, baseurl, offsets, bbox, err, lod)
 
         lod += 1
 
         children_list = []
         if lod <= lod_max:
-            for bb in split_bbox(bbox, lod):
-                json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid)
+            for bb in split_bbox(bbox):
+                json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid, err / 2)
 
                 if len(json_children):
                     children_list.append(json_children)
