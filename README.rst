@@ -9,17 +9,12 @@ extension.
     :align: center
     :width: 400px
 
-.. image:: docs/itowns_montreal1_header.png
-    :align: center
-    :width: 700px
-
 |unix_build| |license|
 
 The current version of LOPoCS provides a way to load Point Cloud from PostgreSQL to the following viewers:
 
-* `Potree viewer <http://www.potree.org/>`_ : viewer with LAZ compressed data.
-* `iTowns2 <https://github.com/iTowns/itowns2>`_ : on the side of other data type
 * `Cesium <https://github.com/AnalyticalGraphicsInc/cesium>`_ thanks to the `3DTiles <https://github.com/AnalyticalGraphicsInc/3d-tiles>`_ format
+* `Potree viewer <http://www.potree.org/>`_ : viewer with LAZ compressed data.
 
 Note that LOPoCS is currently the only **3DTiles** server able to stream data from
 `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_. This
@@ -30,7 +25,8 @@ Developments are still going on to improve state-of-the-art algorithms and
 performances.
 
 `Video <https://vimeo.com/189285883>`_
-`Online demonstration <https://li3ds.github.io/lopocs>`_)
+
+`Online demonstration <https://li3ds.github.io/lopocs>`_
 
 .. contents::
 
@@ -44,7 +40,7 @@ Main features
 * Stream patches stored in PostgreSQL
 * Greyhound protocol support
 * 3DTiles standard support (partial)
-* Produce ready to use examples with Potree, Cesium and itowns2
+* Produce ready to use examples with Potree and Cesium
 
 Installation
 ============
@@ -56,33 +52,32 @@ Dependencies
   - gdal development headers (libgdal-dev)
   - pip (python3-pip)
   - virtualenv (python3-virtualenv)
-  - numpy (python3-numpy)
-  - `pgpointcloud fork <https://github.com/LI3DS/pointcloud>`_
+  - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_
   - `Morton Postgres extension <https://github.com/Oslandia/pgmorton>`_
-  - `PDAL <https://github.com/pblottiere/PDAL/>`_ (optional)
+  - `PDAL <https://github.com/pblottiere/PDAL/>`_ ( if using lopocs loader)
 
-If you want to use the lopocs loader, you must have PDAL installed with extra features.
-These features are currently maintained in `this fork <https://github.com/pblottiere/PDAL>`_,
-but the goal is to contribute most of them in the official PDAL repository.
+.. note:: The PDAL fork contains a new revert_morton plugin that orders points according to the revert Morton algorithm.
 
 From sources
 ------------
 
-::
+.. code-block::bash
 
-  $ git clone https://github.com/Oslandia/lopocs
-  $ cd lopocs
-  $ virtualenv -p /usr/bin/python3 --system-site-packages venv
-  $ source venv/bin/activate
-  (venv)$ pip install -e .
+    $ git clone https://github.com/Oslandia/lopocs
+    $ cd lopocs
+    $ virtualenv -p /usr/bin/python3 venv
+    $ source venv/bin/activate
+    (venv)$ pip install -e .
 
 Configuration
 =============
 
 You will find an example of a configuration file for lopocs in ``conf/lopocs.sample.yml``
 
-You can copy it to ``conf/lopocs.yml`` and fill with your values, lopocs will load it
+You have to copy it to ``conf/lopocs.yml`` and fill with your values, lopocs will load it
 if this file exists.
+Another alternative is to set up the ``LOPOCS_SETTINGS`` environment variable to locate your configuration file.
+
 
 Usage
 =====
@@ -103,38 +98,30 @@ Prepare database
   lopocs_test=# create extension morton;
   CREATE EXTENSION
 
-Fill the database with lopocs command line
-------------------------------------------
+Lopocs CLI
+----------
 
-Ensure you are inside the virtualenv created above and launch the lopocs command
-without arguments to see what subcommands are available
+You can invoke lopocs in your virtualenv to show help and list available subcommands
 
-::
+.. code-block::bash
 
-  $ source venv/bin/activate
-  (venv)$ lopocs
-
-Download a sample data and view it potree in a few minutes:
-
-::
-
-  (venv)$ lopocs demo --work-dir .
+    $ cd lopocs
+    $ source venv/bin/activate
+    (venv)$ lopocs
 
 
-Test lopocs with docker
-=======================
-
-If you are a little bit lazy or you don't want to compile the world right now,
-you can test lopocs with a one line command. You will need ansible for that and docker
-(respectively an IT provisioner and the well known container engine)
+Demo data
+---------
 
 ::
 
-  $ ./docker.sh
+    (venv)$ mkdir demos
+    (venv)$ lopocs demo --work-dir demos/ --sample sthelens --cesium
+    (venv)$ lopocs serve
 
 
 Run tests
-========
+=========
 
 ::
 
