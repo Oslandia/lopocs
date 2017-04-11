@@ -165,14 +165,15 @@ def check():
 @click.option('--capacity', type=int, default=400, help="number of points in a pcpatch")
 @click.option('--potree', 'usewith', help="load data for use with greyhound/potree", flag_value='potree')
 @click.option('--cesium', 'usewith', help="load data for use with use 3dtiles/cesium ", default=True, flag_value='cesium')
+@click.option('--srid', help="set Spatial Reference Identifier (EPSG code) for the source file", default=0, type=int)
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
-def load(filename, table, column, work_dir, server_url, capacity, usewith):
+def load(filename, table, column, work_dir, server_url, capacity, usewith, srid):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
-    _load(filename, table, column, work_dir, server_url, capacity, usewith)
+    _load(filename, table, column, work_dir, server_url, capacity, usewith, srid)
 
 
-def _load(filename, table, column, work_dir, server_url, capacity, usewith):
+def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid=0):
     '''load pointclouds data using pdal and add metadata needed by lopocs'''
     # intialize flask application
     app = create_app()
@@ -206,7 +207,15 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith):
 
     summary = json.loads(output.decode())['summary']
 
-    if summary['srs']['isgeographic']:
+    if 'srs' not in summary and not srid:
+        fatal('Unable to find the spatial reference system, please provide a SRID with option --srid')
+
+    if not srid:
+        # find authority code in wkt string
+        srid = re.findall('EPSG","(\d+)"', summary['srs']['wkt'])[-1]
+
+    p = Proj(init='epsg:{}'.format(srid))
+    if p.is_latlong():
         # geographic
         scale_x, scale_y, scale_z = (1e-6, 1e-6, 1e-2)
     else:
@@ -218,8 +227,6 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith):
     offset_z = summary['bounds']['Z']['min'] + (summary['bounds']['Z']['max'] - summary['bounds']['Z']['min']) / 2
 
     reproject = ""
-    # find authority code in wkt string
-    srid = re.findall('EPSG","(\d+)"', summary['srs']['wkt'])[-1]
 
     if usewith == 'cesium':
         from_srid = srid
