@@ -180,6 +180,8 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith):
     filename = Path(filename)
     work_dir = Path(work_dir)
     extension = filename.suffix[1:].lower()
+    # laz uses las reader in PDAL
+    extension = extension if extension != 'laz' else 'las'
     basename = filename.stem
     basedir = filename.parent
 
