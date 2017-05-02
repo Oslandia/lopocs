@@ -208,11 +208,11 @@ def sql_hierarchy(session, box, lod):
     maxpp_query = session.lopocstable.max_patches_per_query
 
     # retrieve the number of points to select in a pcpatch
-    range_min = 0
+    range_min = 1
     range_max = 1
 
     if maxpp_patch:
-        range_min = 0
+        range_min = 1
         range_max = maxpp_patch
     else:
         beg = 0
@@ -223,7 +223,7 @@ def sql_hierarchy(session, box, lod):
         for i in range(0, lod + 1):
             end = end + pow(4, i)
 
-        range_min = beg
+        range_min = beg + 1
         range_max = end - beg
 
     # build the sql query
@@ -266,13 +266,13 @@ def get_points_query(session, box, schema_pcid, lod):
     poly = boundingbox_to_polygon(box)
 
     # retrieve the number of points to select in a pcpatch
-    range_min = 0
+    range_min = 1
     range_max = 1
 
     maxppp = session.lopocstable.max_points_per_patch
 
     if maxppp:
-        range_min = 0
+        range_min = 1
         range_max = maxppp
     else:
         # adapted to midoc filter
@@ -284,7 +284,7 @@ def get_points_query(session, box, schema_pcid, lod):
         for i in range(0, lod + 1):
             end = end + pow(4, i)
 
-        range_min = beg
+        range_min = beg + 1
         range_max = end - beg
 
     # build the sql query
