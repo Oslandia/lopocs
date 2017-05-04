@@ -127,13 +127,11 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth,
         bbox[5] = bbox[5] * scales[2] + offset[2]
 
     if depth is not None:
-        # FIXME: next line adds colors to airport sample but no color for others
         lod = depth
-        # FIXME: next line adds colors for every samples except airpot
-        # but negative lod doesn't make sense
-        # lod = depth - LOADER_GREYHOUND_MIN_DEPTH
     else:
-        lod = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
+        lod = depthEnd - 1
+    if lod >= LOADER_GREYHOUND_MIN_DEPTH:
+        lod -= LOADER_GREYHOUND_MIN_DEPTH
 
     # get points in database
     if Config.STATS:
