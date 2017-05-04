@@ -84,6 +84,7 @@ ghd_read.add_argument('bounds', type=str, required=False)
 ghd_read.add_argument('scale', type=float, required=False)
 ghd_read.add_argument('offset', type=str, required=False)
 ghd_read.add_argument('schema', type=str, required=False)
+ghd_read.add_argument('compress', type=bool, required=False)
 
 
 @ghd_ns.route("/<resource>/read")
@@ -102,7 +103,8 @@ class Read(Resource):
             args.get('depth'),
             args.get('depthBegin'),
             args.get('depthEnd'),
-            args.get('schema'))
+            args.get('schema'),
+            args.get('compress'))
 
 
 ghd_hierarchy = reqparse.RequestParser()
