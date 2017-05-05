@@ -303,7 +303,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
 
     pending("Creating indexes")
     Session.execute("""
-        create index on {table} using gist(geometry(points));
+        create index on {table} using gist(pc_envelopegeometry(points));
         alter table {table} add column morton bigint;
         select Morton_Update('{table}', 'points', 'morton', 128, TRUE);
         create index on {table}(morton);

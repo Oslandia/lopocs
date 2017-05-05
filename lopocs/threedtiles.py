@@ -118,7 +118,7 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
     maxppp = session.lopocstable.max_points_per_patch
 
     if maxppp:
-        range_min = 0
+        range_min = 1
         range_max = maxppp
     else:
         # adapted to midoc filter
@@ -130,7 +130,7 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
         for i in range(0, lod + 1):
             end = end + pow(4, i)
 
-        range_min = beg
+        range_min = beg + 1
         range_max = end - beg
 
     # build the sql query
@@ -151,7 +151,7 @@ def sql_query(session, box, pcid, lod, hierarchy=False):
                        box[2] - 0.1, box[5] + 0.1, sql_limit,
                        pcid))
     else:
-        sql = ("select pc_compress(pc_setpcid(pc_union("
+        sql = ("select pc_compress(pc_transform(pc_union("
                "pc_filterbetween( "
                "pc_range({0}, {4}, {5}), 'Z', {6}, {7} )), {9}), 'laz') from "
                "(select {0} from {1} where pc_intersects({0}, "
