@@ -45,7 +45,8 @@ def GreyhoundInfo(table, column):
     }
 
 
-def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depthEnd, schema):
+def GreyhoundRead(table, column, offset, scale, bounds, depth,
+                  depthBegin, depthEnd, schema, compress):
 
     session = Session(table, column)
 
@@ -126,19 +127,17 @@ def GreyhoundRead(table, column, offset, scale, bounds, depth, depthBegin, depth
         bbox[5] = bbox[5] * scales[2] + offset[2]
 
     if depth is not None:
-        # FIXME: next line adds colors to airport sample but no color for others
         lod = depth
-        # FIXME: next line adds colors for every samples except airpot
-        # but negative lod doesn't make sense
-        # lod = depth - LOADER_GREYHOUND_MIN_DEPTH
     else:
-        lod = depthEnd - LOADER_GREYHOUND_MIN_DEPTH - 1
+        lod = depthEnd - 1
+    if lod >= LOADER_GREYHOUND_MIN_DEPTH:
+        lod -= LOADER_GREYHOUND_MIN_DEPTH
 
     # get points in database
     if Config.STATS:
         t0 = int(round(time.time() * 1000))
 
-    [read, npoints] = get_points(session, bbox, pcid, lod)
+    [read, npoints] = get_points(session, bbox, pcid, lod, compress)
 
     if Config.STATS:
         t1 = int(round(time.time() * 1000))
@@ -262,7 +261,7 @@ def sql_hierarchy(session, box, lod):
     return sql
 
 
-def get_points_query(session, box, schema_pcid, lod):
+def get_points_query(session, box, schema_pcid, lod, compress):
     poly = boundingbox_to_polygon(box)
 
     # retrieve the number of points to select in a pcpatch
@@ -294,56 +293,69 @@ def get_points_query(session, box, schema_pcid, lod):
         sql_limit = " limit {0} ".format(maxppq)
 
     if Config.USE_MORTON:
-        sql = """
-        select
-            pc_compress(
-                pc_transform(
-                    pc_union(
-                        pc_filterbetween(
-                            pc_range({0}, {4}, {5}), 'Z', {6}, {7})
-                        ), {9}
-                    ), 'laz'
+        sql = "select "
+        if compress:
+            sql += "pc_compress("
+        sql += """
+        pc_transform(
+            pc_union(
+                pc_filterbetween(
+                    pc_range({0}, {4}, {5}),
+                    'Z', {6}, {7}
                 )
+            ), {9}
+        )
+        """
+        if compress:
+            sql += ", 'laz')"
+        sql += """
         from
             (
                 select {0} from {1}
                 where pc_intersects(
                     {0},
-                    st_geomfromtext('polygon (({2}))',{3})
-                ) order by morton {8}
+                    st_geomfromtext('polygon (({2}))',{3}))
+                order by morton {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid,
-                   range_min, range_max, box[2], box[5], sql_limit, schema_pcid)
-
+        """
     else:
-        sql = """
-        select
-            pc_compress(
-                pc_transform(
-                    pc_union(
-                        pc_filterbetween(
-                            pc_range({0}, {4}, {5}), 'Z', {6}, {7} )
-                        ), {9}
-                    ), 'laz'
-            )
+        sql = "select "
+        if compress:
+            sql += "pc_compress("
+        sql += """
+        pc_transform(
+            pc_union(
+                pc_filterbetween(
+                    pc_range({0}, {4}, {5}),
+                    'Z', {6}, {7}
+                )
+            ), {9}
+        )
+        """
+        if compress:
+            sql += ", 'laz')"
+        sql += """
         from
-           (
+            (
                 select {0} from {1}
                 where pc_intersects(
                     {0},
-                    st_geomfromtext('polygon (({2}))',{3})
-                ) {8}
+                    st_geomfromtext('polygon (({2}))',{3}))
+                {8}
             )_
-        """.format(session.column, session.table, poly, session.srsid,
-                   range_min, range_max, box[2], box[5], sql_limit, schema_pcid)
+        """
+
+    sql = sql.format(session.column, session.table, poly, session.srsid,
+                     range_min, range_max, box[2], box[5], sql_limit,
+                     schema_pcid)
     return sql
 
 
-def get_points(session, box, schema_pcid, lod):
+def get_points(session, box, schema_pcid, lod, compress):
 
     npoints = 0
     hexbuffer = bytearray()
-    sql = get_points_query(session, box, schema_pcid, lod)
+    sql = get_points_query(session, box, schema_pcid, lod, compress)
 
     if Config.DEBUG:
         print(sql)
@@ -354,13 +366,15 @@ def get_points(session, box, schema_pcid, lod):
 
         # get json schema representation
         # schema = session.lopocstable.point_schema
-        # decompress(pcpatch_wkb, schema)
+        # if compress:
+        #     decompress(pcpatch_wkb, schema)
 
         # retrieve number of points in wkb pgpointcloud patch
         npoints = patch_nbpoints_laz(pcpatch_wkb)
 
         # extract data
-        hexbuffer = unhexlify(pcpatch_wkb[34:])
+        offset = 34 if compress else 30
+        hexbuffer = unhexlify(pcpatch_wkb[offset:])
 
         # add number of points
         hexbuffer += hexa_signed_int32(npoints)
