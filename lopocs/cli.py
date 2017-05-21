@@ -430,6 +430,6 @@ def demo(sample, work_dir, server_url, usewith):
     _load(dest, sample, 'points', work_dir, server_url, 400, usewith)
 
     click.echo(
-        'Now you can start lopocs with "lopocs serve"'
+        'Now you can test lopocs server by executing "lopocs serve"'
         .format(sample)
     )
