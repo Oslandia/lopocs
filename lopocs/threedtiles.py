@@ -82,13 +82,16 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     else:
         rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
 
-    quantized_points_r = np.c_[points['X'] * scales[0], points['Y'] * scales[1], points['Z'] * scales[2]]
+    quantized_points_r = np.c_[
+        points['X'] * scales[0],
+        points['Y'] * scales[1],
+        points['Z'] * scales[2]
+    ]
+
     quantized_points = np.array(np.core.records.fromarrays(quantized_points_r.T, dtype=pdt))
 
     fth = FeatureTableHeader.from_dtype(
-        quantized_points.dtype, rgb.dtype, npoints,
-        # quantized_volume_offset=offsets,
-        # quantized_volume_scale=scales
+        quantized_points.dtype, rgb.dtype, npoints
     )
     ftb = FeatureTableBody()
     ftb.positions_itemsize = fth.positions_dtype.itemsize
