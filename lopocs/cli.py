@@ -22,6 +22,7 @@ from lopocs.database import Session
 from lopocs.potreeschema import potree_schema
 from lopocs.potreeschema import potree_page
 from lopocs.cesium import cesium_page
+from lopocs.utils import compute_scale_for_cesium
 
 
 samples = {
@@ -29,6 +30,40 @@ samples = {
     'sthelens': 'http://www.liblas.org/samples/st-helens.las',
     'grandlyon': 'https://download.data.grandlyon.com/files/grandlyon/imagerie/mnt2015/lidar/1842_5175.zip'
 }
+
+PDAL_PIPELINE = """
+{{
+"pipeline": [
+    {{
+        "type": "readers.{extension}",
+        "filename":"{realfilename}"
+    }},
+    {{
+        "type": "filters.chipper",
+        "capacity": "{capacity}"
+    }},
+    {reproject}
+    {{
+        "type": "filters.revertmorton"
+    }},
+    {{
+        "type":"writers.pgpointcloud",
+        "connection":"dbname={pg_name} host={pg_host} port={pg_port} user={pg_user} password={pg_password}",
+        "schema": "{schema}",
+        "table":"{tab}",
+        "compression":"none",
+        "srid":"{srid}",
+        "overwrite":"true",
+        "column": "{column}",
+        "scale_x": "{scale_x}",
+        "scale_y": "{scale_y}",
+        "scale_z": "{scale_z}",
+        "offset_x": "{offset_x}",
+        "offset_y": "{offset_y}",
+        "offset_z": "{offset_z}"
+    }}
+]
+}}"""
 
 
 def fatal(message):
@@ -190,7 +225,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     Session.create_pointcloud_lopocs_table()
     ok()
 
-    pending('Loading point clouds into database')
+    pending('Reading summary with PDAL')
     json_path = os.path.join(
         str(work_dir.resolve()),
         '{basename}_{table}_pipeline.json'.format(**locals()))
@@ -206,6 +241,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
         fatal(e)
 
     summary = json.loads(output.decode())['summary']
+    ok()
 
     if 'srs' not in summary and not srid:
         fatal('Unable to find the spatial reference system, please provide a SRID with option --srid')
@@ -215,6 +251,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
         srid = re.findall('EPSG","(\d+)"', summary['srs']['wkt'])[-1]
 
     p = Proj(init='epsg:{}'.format(srid))
+
     if p.is_latlong():
         # geographic
         scale_x, scale_y, scale_z = (1e-6, 1e-6, 1e-2)
@@ -233,20 +270,31 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
         # cesium only use epsg:4978, so we must reproject before loading into pg
         srid = 4978
 
-        pini = Proj(init='epsg:{}'.format(from_srid))
-        pout = Proj(init='epsg:{}'.format(srid))
-        # recompute offset
-        offset_x, offset_y, offset_z = transform(pini, pout, offset_x, offset_y, offset_z)
         reproject = """
         {{
            "type":"filters.reprojection",
            "in_srs":"EPSG:{from_srid}",
            "out_srs":"EPSG:{srid}"
         }},""".format(**locals())
-
-    offset_x = round(offset_x, 2)
-    offset_y = round(offset_y, 2)
-    offset_z = round(offset_z, 2)
+        # transform bounds in new coordinate system
+        pini = Proj(init='epsg:{}'.format(from_srid))
+        pout = Proj(init='epsg:{}'.format(srid))
+        # recompute offset in new space and start at 0
+        pending('Reprojected bounds', nl=True)
+        # xmin, ymin, zmin = transform(pini, pout, offset_x, offset_y, offset_z)
+        xmin, ymin, zmin = transform(pini, pout, summary['bounds']['X']['min'], summary['bounds']['Y']['min'], summary['bounds']['Z']['min'])
+        xmax, ymax, zmax = transform(pini, pout, summary['bounds']['X']['max'], summary['bounds']['Y']['max'], summary['bounds']['Z']['max'])
+        offset_x, offset_y, offset_z = xmin, ymin, zmin
+        click.echo('{} < x < {}'.format(xmin, xmax))
+        click.echo('{} < y < {}'.format(ymin, ymax))
+        click.echo('{} < z < {}  '.format(zmin, zmax), nl=False)
+        ok()
+        pending('Computing best scales for cesium')
+        # override scales for cesium if possible we try to use quantized positions
+        scale_x = min(compute_scale_for_cesium(xmin, xmax), 1)
+        scale_y = min(compute_scale_for_cesium(ymin, ymax), 1)
+        scale_z = min(compute_scale_for_cesium(zmin, zmax), 1)
+        ok('[{}, {}, {}]'.format(scale_x, scale_y, scale_z))
 
     pg_host = app.config['PG_HOST']
     pg_name = app.config['PG_NAME']
@@ -256,42 +304,10 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     realfilename = str(filename.resolve())
     schema, tab = table.split('.')
 
-    json_pipeline = """
-{{
-"pipeline": [
-    {{
-        "type": "readers.{extension}",
-        "filename":"{realfilename}"
-    }},
-    {{
-        "type": "filters.chipper",
-        "capacity": "{capacity}"
-    }},
-    {reproject}
-    {{
-        "type": "filters.revertmorton"
-    }},
-    {{
-        "type":"writers.pgpointcloud",
-        "connection":"dbname={pg_name} host={pg_host} port={pg_port} user={pg_user} password={pg_password}",
-        "schema": "{schema}",
-        "table":"{tab}",
-        "compression":"none",
-        "srid":"{srid}",
-        "overwrite":"true",
-        "column": "{column}",
-        "scale_x": "{scale_x}",
-        "scale_y": "{scale_y}",
-        "scale_z": "{scale_z}",
-        "offset_x": "{offset_x}",
-        "offset_y": "{offset_y}",
-        "offset_z": "{offset_z}"
-    }}
-]
-}}""".format(**locals())
+    pending('Loading point clouds into database')
 
     with io.open(json_path, 'w') as json_file:
-        json_file.write(json_pipeline)
+        json_file.write(PDAL_PIPELINE.format(**locals()))
 
     cmd = "pdal pipeline {}".format(json_path)
 
@@ -318,10 +334,6 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     lpsession = Session(table, column)
     ok()
 
-    # initialize range for level of details
-    lod_min = 0
-    lod_max = 5
-
     # retrieve boundingbox
     fullbbox = lpsession.boundingbox
     bbox = [
@@ -330,6 +342,8 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     ]
 
     if usewith == 'potree':
+        lod_min = 0
+        lod_max = 5
         # add schema currently used by potree (version 1.5RC)
         Session.add_output_schema(
             table, column, 0.01, 0.01, 0.01,
@@ -355,7 +369,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     if usewith == 'cesium':
         pending("Building 3Dtiles tileset")
         hcy = threedtiles.build_hierarchy_from_pg(
-            lpsession, server_url, lod_max, bbox, lod_min
+            lpsession, server_url, bbox
         )
 
         tileset = os.path.join(str(work_dir.resolve()), 'tileset-{}.{}.json'.format(table, column))

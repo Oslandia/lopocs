@@ -25,3 +25,13 @@ class TestUtils(unittest.TestCase):
         str_box = 'BOX(1 2 3 4)'
         l_box = utils.list_from_str_box(str_box)
         cls.assertEqual(l_box, [1, 2, 3, 4])
+
+    def test_compute_scales_cesium(cls):
+        scale = utils.compute_scale_for_cesium(1.56, 1.80)
+        cls.assertEqual(scale, 1e-5)
+        scale = utils.compute_scale_for_cesium(4.5556e6, 4.5557e6)
+        cls.assertEqual(scale, 0.01)
+        scale = utils.compute_scale_for_cesium(4e5, 5e5)
+        cls.assertEqual(scale, 1)
+        scale = utils.compute_scale_for_cesium(100, 300000)
+        cls.assertEqual(scale, 1)

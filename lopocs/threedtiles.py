@@ -13,6 +13,9 @@ from .conf import Config
 from .database import Session
 
 GEOMETRIC_ERROR_DEFAULT = 2000
+LOD_MIN = 0
+LOD_MAX = 5
+LOD_LEN = len(range(LOD_MIN, LOD_MAX))
 
 
 def ThreeDTilesInfo(table, column):
@@ -115,26 +118,20 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     return [tile, npoints]
 
 
-def sql_query(session, box, pcid, lod, hierarchy=False):
+def sql_query(session, box, pcid, lod):
     poly = boundingbox_to_polygon(box)
 
     maxppp = session.lopocstable.max_points_per_patch
+    patch_size = session.patch_size
 
     if maxppp:
         range_min = 1
         range_max = maxppp
     else:
-        # adapted to midoc filter
-        beg = 0
-        for i in range(0, lod):
-            beg = beg + pow(4, i)
-
-        end = 0
-        for i in range(0, lod + 1):
-            end = end + pow(4, i)
-
-        range_min = beg + 1
-        range_max = end - beg
+        # FIXME: may skip some points if patch_size/lod_len is decimal
+        # we need to fix either here or at loading with the patch_size and lod bounds
+        range_min = lod * int(patch_size / LOD_LEN) + 1
+        range_max = (lod + 1) * int(patch_size / LOD_LEN)
 
     # build the sql query
     sql_limit = ""
@@ -188,20 +185,20 @@ def buildbox(bbox):
     return box
 
 
-def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
+def build_hierarchy_from_pg(session, baseurl, bbox):
 
     stored_patches = session.lopocstable.filter_stored_output()
     pcid = stored_patches['pcid']
     offsets = stored_patches['offsets']
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
-    tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT  # (lod_max + 2)*20 - (lod+1)*20
+    tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT
 
     bvol = {}
     # bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
     bvol["box"] = buildbox(bbox)
 
-    lod_str = "lod={0}".format(lod)
+    lod_str = "lod={0}".format(LOD_MIN)
     bounds = ("bounds=[{0},{1},{2},{3},{4},{5}]"
               .format(bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]))
     resource = "{}.{}".format(session.table, session.column)
@@ -215,13 +212,15 @@ def build_hierarchy_from_pg(session, baseurl, lod_max, bbox, lod):
     root = {}
     root["refine"] = "add"
     root["boundingVolume"] = bvol
-    root["geometricError"] = GEOMETRIC_ERROR_DEFAULT / 2  # (lod_max + 2)*20 - (lod+2)*20
+    root["geometricError"] = GEOMETRIC_ERROR_DEFAULT / 2
     root["content"] = {"url": url}
 
     lod = 1
     children_list = []
     for bb in split_bbox(bbox):
-        json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid, GEOMETRIC_ERROR_DEFAULT / 4)
+        json_children = children(
+            session, baseurl, offsets, bb, lod, pcid, GEOMETRIC_ERROR_DEFAULT / 2
+        )
         if len(json_children):
             children_list.append(json_children)
 
@@ -281,14 +280,14 @@ def split_bbox(bbox):
             bbox_sed, bbox_seu]
 
 
-def children(session, baseurl, lod_max, offsets, bbox, lod, pcid, err):
+def children(session, baseurl, offsets, bbox, lod, pcid, err):
 
     # run sql
-    sql = sql_query(session, bbox, pcid, lod, True)
+    sql = sql_query(session, bbox, pcid, lod)
     pcpatch_wkb = session.query(sql)[0][0]
 
     json_me = {}
-    if lod <= lod_max and pcpatch_wkb:
+    if lod <= LOD_MAX and pcpatch_wkb:
         npoints = patch_nbpoints_unc(pcpatch_wkb)
         # print(npoints)
         if npoints > 0:
@@ -297,9 +296,11 @@ def children(session, baseurl, lod_max, offsets, bbox, lod, pcid, err):
         lod += 1
 
         children_list = []
-        if lod <= lod_max:
+        if lod <= LOD_MAX:
             for bb in split_bbox(bbox):
-                json_children = children(session, baseurl, lod_max, offsets, bb, lod, pcid, err / 2)
+                json_children = children(
+                    session, baseurl, offsets, bb, lod, pcid, err / 2
+                )
 
                 if len(json_children):
                     children_list.append(json_children)
