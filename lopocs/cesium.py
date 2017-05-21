@@ -42,7 +42,7 @@ cesium_page = """
           var dest = Cesium.Cartesian3.fromDegrees(
                   cart.longitude * (180 / Math.PI),
                   cart.latitude * (180 / Math.PI),
-                  bounding._boundingSphere.radius * 2.2);
+                  bounding._boundingSphere.radius * 4); // was 2.2
           console.log(dest);
           viewer.camera.setView({{ destination: dest }});
       }});
