@@ -380,6 +380,42 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
         create_cesium_page(str(work_dir.resolve()), table, column)
 
 
+@click.option('--table', required=True, help='table name to store pointclouds, considered in public schema if no prefix provided')
+@click.option('--column', help="column name to store patches", default="points", type=str)
+@click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where temporary files will be saved")
+@click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
+@cli.command()
+def tileset(table, column, server_url, work_dir):
+    """
+    (Re)build a tileset.json for a given table
+    """
+    # intialize flask application
+    create_app()
+
+    work_dir = Path(work_dir)
+
+    if '.' not in table:
+        table = 'public.{}'.format(table)
+
+    lpsession = Session(table, column)
+    # initialize range for level of details
+    fullbbox = lpsession.boundingbox
+    bbox = [
+        fullbbox['xmin'], fullbbox['ymin'], fullbbox['zmin'],
+        fullbbox['xmax'], fullbbox['ymax'], fullbbox['zmax']
+    ]
+    pending('Building tileset from database')
+    hcy = threedtiles.build_hierarchy_from_pg(
+        lpsession, server_url, bbox
+    )
+    ok()
+    tileset = os.path.join(str(work_dir.resolve()), 'tileset-{}.{}.json'.format(table, column))
+    pending('Writing tileset to disk')
+    with io.open(tileset, 'wb') as out:
+        out.write(hcy.encode())
+    ok()
+
+
 def create_potree_page(work_dir, server_url, tablename, column):
     '''Create an html demo page with potree viewer
     '''
