@@ -69,7 +69,6 @@ cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8)])
 pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
 
 
-# @profile
 def get_points(session, box, lod, offsets, pcid, scales, schema):
     sql = sql_query(session, box, pcid, lod)
     if Config.DEBUG:
@@ -195,7 +194,6 @@ def build_hierarchy_from_pg(session, baseurl, bbox):
     tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT
 
     bvol = {}
-    # bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
     bvol["box"] = buildbox(bbox)
 
     lod_str = "lod={0}".format(LOD_MIN)
@@ -245,7 +243,6 @@ def build_children_section(session, baseurl, offsets, bbox, err, lod):
     url = "{0}?{1}&{2}".format(baseurl, lod, bounds)
 
     bvol = {}
-    # bvol["sphere"] = [offsets[0], offsets[1], offsets[2], 2000]
     bvol["box"] = buildbox(bbox)
 
     cjson["boundingVolume"] = bvol
