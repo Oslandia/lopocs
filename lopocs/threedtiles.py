@@ -15,7 +15,7 @@ from .database import Session
 GEOMETRIC_ERROR_DEFAULT = 2000
 LOD_MIN = 0
 LOD_MAX = 5
-LOD_LEN = len(range(LOD_MIN, LOD_MAX))
+LOD_LEN = LOD_MAX + 1 - LOD_MIN
 
 
 def ThreeDTilesInfo(table, column):
