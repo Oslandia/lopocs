@@ -212,7 +212,7 @@ def build_hierarchy_from_pg(session, baseurl, bbox):
     root = {}
     root["refine"] = "add"
     root["boundingVolume"] = bvol
-    root["geometricError"] = GEOMETRIC_ERROR_DEFAULT / 2
+    root["geometricError"] = GEOMETRIC_ERROR_DEFAULT
     root["content"] = {"url": url}
 
     lod = 1
