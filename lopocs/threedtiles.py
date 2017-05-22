@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import math
 import numpy as np
 from flask import make_response
 
@@ -12,7 +13,6 @@ from .utils import (
 from .conf import Config
 from .database import Session
 
-GEOMETRIC_ERROR_DEFAULT = 2000
 LOD_MIN = 0
 LOD_MAX = 5
 LOD_LEN = LOD_MAX + 1 - LOD_MIN
@@ -191,7 +191,11 @@ def build_hierarchy_from_pg(session, baseurl, bbox):
     offsets = stored_patches['offsets']
     tileset = {}
     tileset["asset"] = {"version": "0.0"}
-    tileset["geometricError"] = GEOMETRIC_ERROR_DEFAULT
+    tileset["geometricError"] = math.sqrt(
+        (bbox[3] - bbox[0]) ** 2 + (bbox[4] - bbox[1]) ** 2 + (bbox[5] - bbox[2]) ** 2
+    )
+    if Config.DEBUG:
+        print('tileset geometricErroc', tileset["geometricError"])
 
     bvol = {}
     bvol["box"] = buildbox(bbox)
@@ -207,17 +211,19 @@ def build_hierarchy_from_pg(session, baseurl, bbox):
         .format(base_url, lod_str, bounds)
     )
 
+    GEOMETRIC_ERROR = tileset["geometricError"]
+
     root = {}
     root["refine"] = "add"
     root["boundingVolume"] = bvol
-    root["geometricError"] = GEOMETRIC_ERROR_DEFAULT
+    root["geometricError"] = GEOMETRIC_ERROR / 20
     root["content"] = {"url": url}
 
     lod = 1
     children_list = []
     for bb in split_bbox(bbox):
         json_children = children(
-            session, baseurl, offsets, bb, lod, pcid, GEOMETRIC_ERROR_DEFAULT / 2
+            session, baseurl, offsets, bb, lod, pcid, GEOMETRIC_ERROR / 40
         )
         if len(json_children):
             children_list.append(json_children)
@@ -286,7 +292,6 @@ def children(session, baseurl, offsets, bbox, lod, pcid, err):
     json_me = {}
     if lod <= LOD_MAX and pcpatch_wkb:
         npoints = patch_nbpoints_unc(pcpatch_wkb)
-        # print(npoints)
         if npoints > 0:
             json_me = build_children_section(session, baseurl, offsets, bbox, err, lod)
 
