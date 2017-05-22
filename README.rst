@@ -109,21 +109,35 @@ You can invoke lopocs in your virtualenv to show help and list available subcomm
     $ source venv/bin/activate
     (venv)$ lopocs
 
+Check installation
+------------------
+
+.. code-block::bash
+
+    (venv)$ lopocs check
+    Pdal ... 1.4.0
+    Pdal plugin pgpointcloud ... ok
+    Pdal plugin revertmorton ... ok
+    PostgreSQL ... 9.6.3
+    PostGIS extension ... 2.3.1
+    PgPointcloud extension ... 1.1.0
+    PgPointcloud-PostGIS extension ... 1.0
+
 
 Demo data
 ---------
 
-::
+.. code-block::bash
 
     (venv)$ mkdir demos
-    (venv)$ lopocs demo --work-dir demos/ --sample sthelens --cesium
+    (venv)$ lopocs demo --work-dir demos/ --sample airport --cesium
     (venv)$ lopocs serve
 
 
 Run tests
 =========
 
-::
+.. code-block::bash
 
   (venv)$ pip install nose
   (venv)$ nosetests
