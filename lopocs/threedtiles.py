@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import math
+
 import numpy as np
 from flask import make_response
 
@@ -77,12 +78,22 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     pcpatch_wkb = session.query(sql)[0][0]
     points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
 
-    if max(points['Red']) > 255:
-        # normalize
-        rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
-        rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
+    if 'Red' in points:
+        if max(points['Red']) > 255:
+            # normalize
+            rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
+            rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
+        else:
+            rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
     else:
-        rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
+        # No colors
+        # FIXME: compute color gradient based on elevation or use classification
+        rgb_reduced = np.c_[
+            np.array([0] * npoints),
+            np.array([0] * npoints),
+            np.array([0] * npoints)
+        ]
+        rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
 
     quantized_points_r = np.c_[
         points['X'] * scales[0],
