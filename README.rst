@@ -27,6 +27,10 @@ performances.
 
 `Online demonstration <https://oslandia.github.io/lopocs>`_
 
+Example using 3Dtiles/Cesium with data from `GrandLyon <https://data.grandlyon.com/imagerie/points-lidar-2015-du-grand-lyon/>`_
+
+.. image:: docs/grandlyon.png
+
 .. contents::
 
 .. section-numbering::
@@ -36,6 +40,7 @@ Main features
 =============
 
 * Command line tool to load data into PostgreSQL
+* Swagger API
 * Stream patches stored in PostgreSQL
 * Greyhound protocol support
 * 3DTiles standard support (partial)
@@ -133,6 +138,29 @@ Demo data
     (venv)$ lopocs demo --work-dir demos/ --sample airport --cesium
     (venv)$ lopocs serve
 
+Copy/Paste the link at the end of the log in your browser and you will be able to see this:
+
+.. image:: docs/airport.png
+
+Swagger API
+-----------
+
+Each viewer has specific expectations and communication protocol. So, the API is built to meet these specific needs.
+
+Currently, 2 kinds of formats are supported:
+
+  - 3DTiles
+  - Greyhound format (LAZ data with a footer indicating the number of points)
+
+LOPoCS is able to stream data up to 2 viewers:
+
+  - Cesium with the 3DTiles format
+  - Potree viewer with the Greyhound format
+
+LOPoCS provides its RESTful API through a Swagger UI by default on
+`<http://localhost:5000>`_
+
+.. image:: docs/api.png
 
 Run tests
 =========
