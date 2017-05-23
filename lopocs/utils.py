@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import math
 from struct import pack, unpack
 from binascii import unhexlify
 import os
@@ -75,6 +76,18 @@ def decompress(points, schema):
     decompressed = d.decompress(output)
 
     return decompressed
+
+
+def compute_scale_for_cesium(coordmin, coordmax):
+    '''
+    Cesium quantized positions need to be in uint16
+    This function computes the best scale to apply to coordinates
+    to fit the range [0, 65535]
+    '''
+    max_int = np.iinfo(np.uint16).max
+    delta = abs(coordmax - coordmin)
+    scale = 10 ** -(math.floor(math.log1p(max_int / delta) / math.log1p(10)))
+    return scale
 
 
 def greyhound_types(typ):
