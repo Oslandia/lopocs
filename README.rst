@@ -7,7 +7,6 @@ extension.
 
 .. image:: docs/lopocs.png
     :align: center
-    :width: 400px
 
 |unix_build| |license|
 
