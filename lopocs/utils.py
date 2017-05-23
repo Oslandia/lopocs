@@ -85,7 +85,7 @@ def compute_scale_for_cesium(coordmin, coordmax):
     to fit the range [0, 65535]
     '''
     max_int = np.iinfo(np.uint16).max
-    delta = coordmax - coordmin
+    delta = abs(coordmax - coordmin)
     scale = 10 ** -(math.floor(math.log1p(max_int / delta) / math.log1p(10)))
     return scale
 
