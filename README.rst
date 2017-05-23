@@ -25,6 +25,8 @@ performances.
 
 `Video <https://vimeo.com/189285883>`_
 
+`Online demonstration <https://oslandia.github.io/lopocs>`_
+
 .. contents::
 
 .. section-numbering::
