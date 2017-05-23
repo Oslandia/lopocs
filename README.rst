@@ -87,15 +87,15 @@ Prepare database
 
 ::
 
-  $ createdb lopocs_test
-  $ psql lopocs_test
-  lopocs_test=# create extension postgis;
+  $ createdb lopocs
+  $ psql lopocs
+  lopocs=# create extension postgis;
   CREATE EXTENSION
-  lopocs_test=# create extension pointcloud;
+  lopocs=# create extension pointcloud;
   CREATE EXTENSION
-  lopocs_test=# create extension pointcloud_postgis;
+  lopocs=# create extension pointcloud_postgis;
   CREATE EXTENSION
-  lopocs_test=# create extension morton;
+  lopocs=# create extension morton;
   CREATE EXTENSION
 
 Lopocs CLI
