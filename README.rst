@@ -142,6 +142,10 @@ Run tests
   (venv)$ pip install nose
   (venv)$ nosetests
 
+Licence
+=======
+
+LGPL>2: `LICENSE <https://github.com/Oslandia/lopocs/blob/master/LICENSE>`_.
 
 .. |unix_build| image:: https://img.shields.io/travis/Oslandia/lopocs/master.svg?style=flat-square&label=unix%20build
     :target: http://travis-ci.org/Oslandia/lopocs
