@@ -28,7 +28,7 @@ from lopocs.utils import compute_scale_for_cesium
 samples = {
     'airport': 'http://www.liblas.org/samples/LAS12_Sample_withRGB_Quick_Terrain_Modeler_fixed.las',
     'sthelens': 'http://www.liblas.org/samples/st-helens.las',
-    'grandlyon': 'https://download.data.grandlyon.com/files/grandlyon/imagerie/mnt2015/lidar/1842_5175.zip'
+    'lyon': (3946, 'http://3d.oslandia.com/lyon.laz')
 }
 
 PDAL_PIPELINE = """
@@ -468,7 +468,13 @@ def demo(sample, work_dir, server_url, usewith):
     '''
     download sample lidar data, load it into pgpointcloud
     '''
-    filepath = Path(samples[sample])
+    srid = None
+    if isinstance(samples[sample], (list, tuple)):
+        # srid given
+        filepath = Path(samples[sample][1])
+        srid = samples[sample][0]
+    else:
+        filepath = Path(samples[sample])
     pending('Using sample data {}: {}'.format(sample, filepath.name))
     dest = os.path.join(work_dir, filepath.name)
     ok()
@@ -477,7 +483,10 @@ def demo(sample, work_dir, server_url, usewith):
         download('Downloading sample', samples[sample], dest)
 
     # now load data
-    _load(dest, sample, 'points', work_dir, server_url, 400, usewith)
+    if srid:
+        _load(dest, sample, 'points', work_dir, server_url, 400, usewith, srid=srid)
+    else:
+        _load(dest, sample, 'points', work_dir, server_url, 400, usewith)
 
     click.echo(
         'Now you can test lopocs server by executing "lopocs serve"'

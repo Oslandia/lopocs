@@ -65,7 +65,56 @@ def ThreeDTilesRead(table, column, bounds, lod):
     return response
 
 
-# FIXME: change pdt type in case of quantized values
+def classification_to_rgb(points):
+    """
+    map LAS Classification to RGB colors.
+    See LAS spec for codes :
+    http://www.asprs.org/wp-content/uploads/2010/12/asprs_las_format_v11.pdf
+
+    :param points: points as a structured numpy array
+    :returns: numpy.record with dtype [('Red', 'u1'), ('Green', 'u1'), ('Blue', 'u1')])
+    """
+    # building (brown)
+    building_mask = (points['Classification'] == 6).astype(np.int)
+    red = building_mask * 186
+    green = building_mask * 79
+    blue = building_mask * 63
+    # high vegetation (green)
+    veget_mask = (points['Classification'] == 5).astype(np.int)
+    red += veget_mask * 140
+    green += veget_mask * 156
+    blue += veget_mask * 8
+    # medium vegetation
+    veget_mask = (points['Classification'] == 4).astype(np.int)
+    red += veget_mask * 171
+    green += veget_mask * 200
+    blue += veget_mask * 116
+    # low vegetation
+    veget_mask = (points['Classification'] == 3).astype(np.int)
+    red += veget_mask * 192
+    green += veget_mask * 213
+    blue += veget_mask * 160
+    # water (blue)
+    water_mask = (points['Classification'] == 9).astype(np.int)
+    red += water_mask * 141
+    green += water_mask * 179
+    blue += water_mask * 198
+    # ground (light brown)
+    grd_mask = (points['Classification'] == 2).astype(np.int)
+    red += grd_mask * 226
+    green += grd_mask * 230
+    blue += grd_mask * 229
+    # Unclassified (grey)
+    grd_mask = (points['Classification'] == 1).astype(np.int)
+    red += grd_mask * 176
+    green += grd_mask * 185
+    blue += grd_mask * 182
+
+    rgb_reduced = np.c_[red, green, blue]
+    rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
+    return rgb
+
+
 cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8)])
 pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
 
@@ -77,17 +126,20 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
 
     pcpatch_wkb = session.query(sql)[0][0]
     points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
+    fields = points.dtype.fields.keys()
 
-    if 'Red' in points:
+    if 'Red' in fields:
         if max(points['Red']) > 255:
             # normalize
             rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255]
             rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
         else:
             rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
+    elif 'Classification' in fields:
+        rgb = classification_to_rgb(points)
     else:
         # No colors
-        # FIXME: compute color gradient based on elevation or use classification
+        # FIXME: compute color gradient based on elevation
         rgb_reduced = np.c_[
             np.array([0] * npoints),
             np.array([0] * npoints),
@@ -132,6 +184,7 @@ def sql_query(session, box, pcid, lod):
     poly = boundingbox_to_polygon(box)
 
     maxppp = session.lopocstable.max_points_per_patch
+    # FIXME: need to be cached
     patch_size = session.patch_size
 
     if maxppp:
