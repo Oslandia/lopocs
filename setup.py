@@ -29,8 +29,6 @@ requirements = (
 
 dev_requirements = (
     'pytest',
-    'pytest-flask',
-    'tox',
     'flake8',
     'invoke',
     'pytest-cov',

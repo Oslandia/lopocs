@@ -138,8 +138,8 @@ Run tests
 
 .. code-block:: bash
 
-  (venv)$ pip install nose
-  (venv)$ nosetests
+  (venv)$ pip install .[dev]
+  (venv)$ py.test
 
 Licence
 =======
