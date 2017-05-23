@@ -26,8 +26,6 @@ performances.
 
 `Video <https://vimeo.com/189285883>`_
 
-`Online demonstration <https://li3ds.github.io/lopocs>`_
-
 .. contents::
 
 .. section-numbering::
