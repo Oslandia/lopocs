@@ -61,7 +61,7 @@ Dependencies
 From sources
 ------------
 
-.. code-block::bash
+.. code-block:: bash
 
     $ git clone https://github.com/Oslandia/lopocs
     $ cd lopocs
@@ -85,7 +85,7 @@ Usage
 Prepare database
 ----------------
 
-::
+.. code-block:: bash
 
   $ createdb lopocs
   $ psql lopocs
@@ -103,7 +103,7 @@ Lopocs CLI
 
 You can invoke lopocs in your virtualenv to show help and list available subcommands
 
-.. code-block::bash
+.. code-block:: bash
 
     $ cd lopocs
     $ source venv/bin/activate
@@ -112,7 +112,7 @@ You can invoke lopocs in your virtualenv to show help and list available subcomm
 Check installation
 ------------------
 
-.. code-block::bash
+.. code-block:: bash
 
     (venv)$ lopocs check
     Pdal ... 1.4.0
@@ -127,7 +127,7 @@ Check installation
 Demo data
 ---------
 
-.. code-block::bash
+.. code-block:: bash
 
     (venv)$ mkdir demos
     (venv)$ lopocs demo --work-dir demos/ --sample airport --cesium
@@ -137,7 +137,7 @@ Demo data
 Run tests
 =========
 
-.. code-block::bash
+.. code-block:: bash
 
   (venv)$ pip install nose
   (venv)$ nosetests
