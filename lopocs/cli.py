@@ -462,8 +462,8 @@ def create_cesium_page(work_dir, tablename, column):
 @click.option('--sample', help="sample data available", default="airport", type=click.Choice(samples.keys()))
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
-@click.option('--potree', 'usewith', help="load data for use with greyhound/potree", flag_value='potree')
-@click.option('--cesium', 'usewith', help="load data for use with use 3dtiles/cesium ", default=True, flag_value='cesium')
+@click.option('--potree', 'usewith', help="load data for using with greyhound/potree", flag_value='potree')
+@click.option('--cesium', 'usewith', help="load data for using with 3dtiles/cesium ", default=True, flag_value='cesium')
 def demo(sample, work_dir, server_url, usewith):
     '''
     download sample lidar data, load it into pgpointcloud
