@@ -94,15 +94,10 @@ Prepare database
 .. code-block:: bash
 
   $ createdb lopocs
-  $ psql lopocs
-  lopocs=# create extension postgis;
-  CREATE EXTENSION
-  lopocs=# create extension pointcloud;
-  CREATE EXTENSION
-  lopocs=# create extension pointcloud_postgis;
-  CREATE EXTENSION
-  lopocs=# create extension morton;
-  CREATE EXTENSION
+  $ psql -d lopocs -c 'create extension postgis'
+  $ psql -d lopocs -c 'create extension pointcloud'
+  $ psql -d lopocs -c 'create extension pointcloud_postgis'
+  $ psql -d lopocs -c 'create extension morton'
 
 Lopocs CLI
 ----------
