@@ -127,12 +127,16 @@ def cli():
     pass
 
 
+@click.option('--host', help='The hostname to listen on (default is 127.0.0.1)',
+              default='127.0.0.1', type=str)
+@click.option('--port', help='The port to listen on (default is 5000)',
+              default=5000, type=int)
 @cli.command()
-def serve():
+def serve(host, port):
     '''run lopocs server (development usage)'''
     app = create_app()
     CORS(app)
-    app.run()
+    app.run(host=host, port=port)
 
 
 def cmd_rt(message, command):
