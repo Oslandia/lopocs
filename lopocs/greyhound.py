@@ -10,7 +10,7 @@ from .database import Session
 from .utils import (
     list_from_str, read_in_cache,
     write_in_cache, boundingbox_to_polygon,
-    patch_nbpoints_laz, hexa_signed_int32
+    patch_numpoints, hexa_signed_int32
 )
 from .conf import Config
 from .stats import Stats
@@ -370,7 +370,7 @@ def get_points(session, box, schema_pcid, lod, compress):
         #     decompress(pcpatch_wkb, schema)
 
         # retrieve number of points in wkb pgpointcloud patch
-        npoints = patch_nbpoints_laz(pcpatch_wkb)
+        npoints = patch_numpoints(pcpatch_wkb)
 
         # extract data
         offset = 34 if compress else 30
@@ -417,7 +417,7 @@ def build_hierarchy_from_pg(session, lod, lod_max, bbox):
 
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = patch_nbpoints_laz(pcpatch_wkb)
+        npoints = patch_numpoints(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1
@@ -470,7 +470,7 @@ def build_hierarchy_from_pg_single(session, lod, lod_max, bbox):
     pcpatch_wkb = session.query(sql)[0][0]
     hierarchy = {}
     if lod <= lod_max and pcpatch_wkb:
-        npoints = patch_nbpoints_laz(pcpatch_wkb)
+        npoints = patch_numpoints(pcpatch_wkb)
         hierarchy['n'] = npoints
 
     lod += 1
