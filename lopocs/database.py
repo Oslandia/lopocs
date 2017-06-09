@@ -434,17 +434,17 @@ class Session():
         conn = cls.pool.getconn()
         conn.autocommit = True
         cur = conn.cursor()
+        # work around a performance bug occuring when the Pointcloud extension is loaded
+        # before the PostGIS extension. So call postgis_version before anything to make
+        # certain that PostGIS is loaded first.
+        cur.execute('select postgis_version()')
         cur.execute(query, parameters)
         cls.pool.putconn(conn)
+        return cur
 
     @classmethod
     def query(cls, query, parameters=None):
         """Performs a single query and fetch all results
         """
-        conn = cls.pool.getconn()
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute(query, parameters)
-        res = cur.fetchall()
-        cls.pool.putconn(conn)
-        return res
+        cur = cls.execute(query, parameters)
+        return cur.fetchall()
