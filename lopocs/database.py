@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from multiprocessing import cpu_count
 from collections import defaultdict
+from contextlib import contextmanager
 
 import psycopg2.extras
 import psycopg2.extensions
@@ -428,23 +429,36 @@ class Session():
         return pcid, bbox_scaled
 
     @classmethod
+    @contextmanager
+    def _conn(cls):
+        conn = cls.pool.getconn()
+        conn.autocommit = True
+        yield conn
+        cls.pool.putconn(conn)
+
+    @classmethod
+    @contextmanager
+    def _execute(cls, query, parameters=None):
+        with cls._conn() as conn:
+            with conn.cursor() as cursor:
+                # work around a performance bug occuring when the Pointcloud extension
+                # is loaded before the PostGIS extension. So call postgis_version before
+                # anything to make certain that PostGIS is loaded first.
+                cursor.execute('select postgis_version()')
+                cursor.execute(query, parameters)
+                yield cursor
+
+    @classmethod
     def execute(cls, query, parameters=None):
         """Execute a pg statement without fetching results (use for DDL statement)
         """
-        conn = cls.pool.getconn()
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute(query, parameters)
-        cls.pool.putconn(conn)
+        with cls._execute(query, parameters):
+            pass
 
     @classmethod
     def query(cls, query, parameters=None):
         """Performs a single query and fetch all results
         """
-        conn = cls.pool.getconn()
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute(query, parameters)
-        res = cur.fetchall()
-        cls.pool.putconn(conn)
+        with cls._execute(query, parameters) as cursor:
+            res = cursor.fetchall()
         return res
