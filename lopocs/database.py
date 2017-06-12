@@ -441,10 +441,6 @@ class Session():
     def _execute(cls, query, parameters=None):
         with cls._conn() as conn:
             with conn.cursor() as cursor:
-                # work around a performance bug occuring when the Pointcloud extension
-                # is loaded before the PostGIS extension. So call postgis_version before
-                # anything to make certain that PostGIS is loaded first.
-                cursor.execute('select postgis_version()')
                 cursor.execute(query, parameters)
                 yield cursor
 
