@@ -142,12 +142,8 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     else:
         # No colors
         # FIXME: compute color gradient based on elevation
-        rgb_reduced = np.c_[
-            np.array([0] * npoints),
-            np.array([0] * npoints),
-            np.array([0] * npoints)
-        ]
-        rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
+        rgb_reduced = np.zeros((npoints, 3), dtype=int)
+        rgb = np.array(np.core.records.fromarrays(rgb_reduced, dtype=cdt))
 
     quantized_points_r = np.c_[
         points['X'] * scales[0],
