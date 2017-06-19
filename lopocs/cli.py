@@ -31,6 +31,7 @@ samples = {
     'lyon': (3946, 'http://3d.oslandia.com/lyon.laz')
 }
 
+
 PDAL_PIPELINE = """
 {{
 "pipeline": [
@@ -44,7 +45,7 @@ PDAL_PIPELINE = """
     }},
     {reproject}
     {{
-        "type": "filters.revertmorton"
+        "type": "filters.randomize"
     }},
     {{
         "type":"writers.pgpointcloud",
@@ -135,7 +136,7 @@ def cli():
 def serve(host, port):
     '''run lopocs server (development usage)'''
     app = create_app()
-    CORS(app)
+    CORS(app, supports_credentials=True)
     app.run(host=host, port=port)
 
 
@@ -204,6 +205,7 @@ def check():
 @click.option('--capacity', type=int, default=400, help="number of points in a pcpatch")
 @click.option('--potree', 'usewith', help="load data for use with greyhound/potree", flag_value='potree')
 @click.option('--cesium', 'usewith', help="load data for use with use 3dtiles/cesium ", default=True, flag_value='cesium')
+@click.option('--itowns', 'usewith', help="load data for use with use itowns ", flag_value='itowns')
 @click.option('--srid', help="set Spatial Reference Identifier (EPSG code) for the source file", default=0, type=int)
 @click.argument('filename', type=click.Path(exists=True))
 @cli.command()
@@ -322,12 +324,20 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     ok()
 
     pending("Creating indexes")
-    Session.execute("""
-        create index on {table} using gist(pc_envelopegeometry(points));
-        alter table {table} add column morton bigint;
-        select Morton_Update('{table}', 'points', 'morton', 128, TRUE);
-        create index on {table}(morton);
-    """.format(**locals()))
+    if usewith == 'itowns':
+        # we don't use revertmorton for itowns
+        Session.execute("""
+            create index on {table} using gist(pc_envelopegeometry({column}));
+            alter table {table} add column zavg numrange;
+            update {table} set zavg = numrange(pc_patchmin({column}, 'Z'), pc_patchmax({column}, 'Z'));
+            create index on {table} using gist(zavg);
+        """.format(**locals()))
+    else:
+        Session.execute("""
+            alter table {table} add column morton bigint;
+            select Morton_Update('{table}', 'points', 'morton', 128, TRUE);
+            create index on {table}(morton);
+        """.format(**locals()))
     ok()
 
     pending("Adding metadata for lopocs")
@@ -467,7 +477,8 @@ def create_cesium_page(work_dir, tablename, column):
 @click.option('--work-dir', type=click.Path(exists=True), required=True, help="working directory where sample files will be saved")
 @click.option('--server-url', type=str, help="server url for lopocs", default="http://localhost:5000")
 @click.option('--potree', 'usewith', help="load data for using with greyhound/potree", flag_value='potree')
-@click.option('--cesium', 'usewith', help="load data for using with 3dtiles/cesium ", default=True, flag_value='cesium')
+@click.option('--cesium', 'usewith', help="load data for using with 3dtiles/cesium ", flag_value='cesium')
+@click.option('--itowns', 'usewith', help="load data for using with 3dtiles/cesium ", default=True, flag_value='itowns')
 def demo(sample, work_dir, server_url, usewith):
     '''
     download sample lidar data, load it into pgpointcloud

@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
+from time import mktime
+
+from flask import request
 from flask_restplus import Api, Resource, reqparse
+from wsgiref.handlers import format_date_time
 
 from .greyhound import GreyhoundInfo, GreyhoundRead, GreyhoundHierarchy
 from .threedtiles import ThreeDTilesInfo, ThreeDTilesRead
+from .itowns import ItownsRead, ItownsHrc
 from .database import Session
 
 api = Api(
@@ -10,6 +16,11 @@ api = Api(
     title='LOPoCS API',
     description='API for accessing LOPoCS'
 )
+
+
+now = datetime.now()
+stamp = mktime(now.timetuple())
+LAST_MODIFIED = format_date_time(stamp)
 
 
 # global namespace
@@ -158,3 +169,35 @@ class ThreeDTilesReadRoute(Resource):
             args.get('bounds'),
             args.get('lod')
         )
+
+
+# itowns namespace
+itowns_ns = api.namespace('itowns', description='itowns streaming format')
+
+
+itowns_read_args = reqparse.RequestParser()
+itowns_read_args.add_argument('isleaf', type=int, required=False, default=0)
+
+
+@itowns_ns.route("/<resource>/r/<bbox_encoded>.bin")
+class ItownsReadRoute(Resource):
+
+    @itowns_ns.expect(itowns_read_args, validate=True)
+    def get(self, resource, bbox_encoded):
+        if request.headers.get('If-Modified-Since') == LAST_MODIFIED:
+            # not changed since last restart
+            return "Resource not modified", 304
+        args = itowns_read_args.parse_args()
+        table, column = validate_resource(resource)
+        return ItownsRead(table, column, bbox_encoded, args.get('isleaf'), LAST_MODIFIED)
+
+
+@itowns_ns.route("/<resource>/r/<bbox_encoded>.hrc")
+class ItownsHrcRoute(Resource):
+
+    def get(self, resource, bbox_encoded):
+        if request.headers.get('If-Modified-Since') == LAST_MODIFIED:
+            # not changed since last restart
+            return "Resource not modified", 304
+        table, column = validate_resource(resource)
+        return ItownsHrc(table, column, bbox_encoded, LAST_MODIFIED)
