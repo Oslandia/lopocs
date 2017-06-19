@@ -475,16 +475,18 @@ def demo(sample, work_dir, server_url, usewith):
     srid = None
     if isinstance(samples[sample], (list, tuple)):
         # srid given
+        download_link = samples[sample][1]
         filepath = Path(samples[sample][1])
         srid = samples[sample][0]
     else:
+        download_link = samples[sample]
         filepath = Path(samples[sample])
     pending('Using sample data {}: {}'.format(sample, filepath.name))
     dest = os.path.join(work_dir, filepath.name)
     ok()
 
     if not os.path.exists(dest):
-        download('Downloading sample', samples[sample], dest)
+        download('Downloading sample', download_link, dest)
 
     # now load data
     if srid:
