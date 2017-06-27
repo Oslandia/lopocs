@@ -14,7 +14,7 @@ binfloat = Struct('I')
 binchar = Struct('B')
 
 LOD_MIN = 0
-LOD_MAX = 5
+LOD_MAX = 10
 LOD_LEN = LOD_MAX + 1 - LOD_MIN
 
 SMALL_LEAF = 10000
@@ -31,7 +31,7 @@ POINT_QUERY = """
         and zavg && numrange({z1}::numeric, {z2}::numeric)
     ), ordered as (
         select
-            pc_filterbetween(pc_range({session.column}, {start} + 1, {count}), 'Z', {z1}, {z2}) as points
+            pc_filterbetween(pc_range({session.column}, {start}, {count}), 'Z', {z1}, {z2}) as points
         from patches
         order by rand
         {sql_limit}
@@ -46,13 +46,9 @@ def ItownsRead(table, column, bbox_encoded, isleaf, last_modified):
     bbox_encoded = bbox_encoded.strip('r.')
     lod = len(bbox_encoded)
     box = decode_bbox(session, bbox_encoded)
-    # print("bbox decoded", box)
-    # print("lod", lod)
-    # requested = [scales, offsets]
     stored_patches = session.lopocstable.filter_stored_output()
     schema = stored_patches['point_schema']
     pcid = stored_patches['pcid']
-    # scales = [scale] * 3
     scales = stored_patches['scales']
     offsets = stored_patches['offsets']
     try:
@@ -106,6 +102,7 @@ def get_numpoints(session, box, lod, patch_size):
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
     ])
 
+    # psize = 1
     psize = int(patch_size / LOD_LEN)
     start = lod * psize + 1
     count = psize
@@ -139,7 +136,14 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
         cbox = get_child(box, child)
         cnpoints.append(get_numpoints(session, cbox, lod + 1, patch_size))
 
-    if sum(cnpoints) < SMALL_LEAF:
+    # psize = 1
+    psize = int(patch_size / LOD_LEN)
+    child_desc = [
+        (patch_size - (lod + 1) * psize) * (cp / psize)
+        for cp in cnpoints
+    ]
+
+    if sum(child_desc) < SMALL_LEAF:
         npoints += sum(cnpoints)
     else:
         for child in range(8):
@@ -375,9 +379,14 @@ def sql_query(session, box, pcid, lod, isleaf):
         sql_limit = " limit {0} ".format(maxppq)
 
     psize = int(patch_size / LOD_LEN)
+    # psize = 1
     start = lod * psize + 1
     count = psize
 
+    # print('patch_size', patch_size)
+    # print('psize', psize)
+    # print('start', start)
+    # print('count', count)
     if isleaf:
         # we want all points left
         count = patch_size - start
