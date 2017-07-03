@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from struct import Struct
 from collections import namedtuple
+from math import pow
 
 import numpy as np
 from flask import make_response, abort
@@ -17,7 +18,7 @@ LOD_MIN = 0
 LOD_MAX = 10
 LOD_LEN = LOD_MAX + 1 - LOD_MIN
 
-SMALL_LEAF = 10000
+NODE_POINT_LIMIT = 20000
 
 POINT_QUERY = """
     with patches as
@@ -95,21 +96,31 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
     response.headers['Last-Modified'] = last_modified
     return response
 
+def compute_psize(lod):
+    # TODO: lod_size_threshold should depend on total point count
+    lod_size_threshold = 2
+
+    # If we expect to receive a lot of patches, we only return 1 point per patch
+    if lod < lod_size_threshold:
+        return 1
+    # As soon as the patch count lowers, we want to return more and more points
+    # because a constant point cound per patch would lead to "shallow" nodes,
+    # with very few points.
+    return int(pow(8, lod - 1))
 
 def get_numpoints(session, box, lod, patch_size):
     poly = boundingbox_to_polygon([
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
     ])
 
-    # psize = 1
-    psize = int(patch_size / LOD_LEN)
-    start = lod * psize + 1
-    count = psize
+    psize = compute_psize(lod)
+    start = 1 + sum([compute_psize(l) for l in range(lod)])
+    count = min(psize, patch_size - start)
 
-    maxppq = session.lopocstable.max_patches_per_query
     sql_limit = ''
-    if maxppq:
-        sql_limit = " limit {0} ".format(maxppq)
+    maxppq = NODE_POINT_LIMIT / count
+    # if maxppq:
+        # sql_limit = " limit {0} ".format(maxppq)
 
     sql = POINT_QUERY.format(
         z1=box.zmin, z2=box.zmax,
@@ -122,6 +133,7 @@ def get_numpoints(session, box, lod, patch_size):
 
 
 def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', buffer=None):
+    psize = compute_psize(lod)
 
     if buffer is None:
         buffer = {}
@@ -129,30 +141,28 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
     # root
     bitarray = ['0'] * 8
 
-    cnpoints = []
+    # estimate the number of patches
+    npatches = npoints / psize
 
-    for child in range(8):
-        cbox = get_child(box, child)
-        cnpoints.append(get_numpoints(session, cbox, lod + 1, patch_size))
+    # how many points would a isleaf=1 request return for this bbox
+    points_used_in_previous_lod = npatches * sum([compute_psize(l) for l in range(lod)])
 
-    # psize = 1
-    psize = int(patch_size / LOD_LEN)
-    child_desc = [
-        (patch_size - (lod + 1) * psize) * (cp / psize)
-        for cp in cnpoints
-    ]
+    estimate_total = npatches * patch_size - points_used_in_previous_lod
 
-    if sum(child_desc) < SMALL_LEAF:
-        npoints += sum(cnpoints)
+    # can we stop subviding?
+    if estimate_total < NODE_POINT_LIMIT:
+        buffer[name] = [bitarray, int(estimate_total)]
     else:
         for child in range(8):
             cbox = get_child(box, child)
-            if cnpoints[child] > 0:
+            cnpoints = get_numpoints(session, cbox, lod + 1, patch_size)
+
+            if cnpoints > 0:
                 bitarray[child] = '1'
                 if depth < depth_max:
-                    octree(session, depth + 1, depth_max, cbox, cnpoints[child], lod + 1, patch_size, name + str(child), buffer)
+                    octree(session, depth + 1, depth_max, cbox, cnpoints, lod + 1, patch_size, name + str(child), buffer)
 
-    buffer[name] = [bitarray, npoints]
+        buffer[name] = [bitarray, npoints]
 
     if not depth:
         sorted_keys = sorted(buffer.keys(), key=lambda x: (len(x), x))
@@ -401,15 +411,9 @@ def sql_query(session, box, pcid, lod, isleaf):
     maxppp = session.lopocstable.max_points_per_patch
     patch_size = session.patch_size
 
-    sql_limit = ""
-    maxppq = session.lopocstable.max_patches_per_query
-    if maxppq and not isleaf:
-        sql_limit = " limit {0} ".format(maxppq)
-
-    psize = int(patch_size / LOD_LEN)
-    # psize = 1
-    start = lod * psize + 1
-    count = psize
+    psize = compute_psize(lod)
+    start = 1 + sum([compute_psize(l) for l in range(lod)])
+    count = min(psize, patch_size - start)
 
     # print('patch_size', patch_size)
     # print('psize', psize)
@@ -418,6 +422,11 @@ def sql_query(session, box, pcid, lod, isleaf):
     if isleaf:
         # we want all points left
         count = patch_size - start
+
+    sql_limit = ""
+    # maxppq = NODE_POINT_LIMIT / count
+    # if maxppq and not isleaf:
+        # sql_limit = " limit {0} ".format(maxppq)
 
     sql = POINT_QUERY.format(z1=box.zmin, z2=box.zmax,
                              last_select='pc_union(points)',
