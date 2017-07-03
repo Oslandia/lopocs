@@ -364,11 +364,23 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
         (points['Z'] * scales[2] + offsets[2]) - box.zmin
     ]
 
+    # Compute the min/max of offseted/scaled values
+    realmin = [
+        (np.min(points['X']) * scales[0] + offsets[0]) - box.xmin,
+        (np.min(points['Y']) * scales[1] + offsets[1]) - box.ymin,
+        (np.min(points['Z']) * scales[2] + offsets[2]) - box.zmin
+    ]
+    realmax = [
+        (np.max(points['X']) * scales[0] + offsets[0]) - box.xmin,
+        (np.max(points['Y']) * scales[1] + offsets[1]) - box.ymin,
+        (np.max(points['Z']) * scales[2] + offsets[2]) - box.zmin
+    ]
+
     quantized_points = np.array(np.core.records.fromarrays(quantized_points_r.T, dtype=pdt))
     header = np.array(
         [
-            0, 0, 0,
-            box.xmax - box.xmin, box.ymax - box.ymin, box.zmax - box.zmin
+            realmin[0], realmin[1], realmin[2],
+            realmax[0], realmax[1], realmax[2]
         ], dtype='float32')
 
     buffer = header.tostring() + quantized_points.tostring() + rgb.tostring()
