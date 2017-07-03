@@ -156,6 +156,17 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
 
     if not depth:
         sorted_keys = sorted(buffer.keys(), key=lambda x: (len(x), x))
+        # print .hrc result
+        for k in sorted(buffer.keys()):
+            if len(k) > 0:
+                children_count = sum(map(lambda x: int(x), buffer[k][0]))
+                if children_count:
+                    print('{}├── \033[30;34m{}\033[0m {} -> {}'.format('│   ' * (len(k) - 1), k, buffer[k][1], ''.join(buffer[k][0])[::-1]))
+                else:
+                    print('{}├── \033[30;34m{}\033[0m {}'.format('│   ' * (len(k) - 1), k, buffer[k][1]))
+            else:
+                print('\033[30;34m{}\033[0m {}'.format('X', buffer[k][1]))
+
         output = b''.join([
             binchar.pack(int(''.join(buffer[key][0])[::-1], 2)) + binfloat.pack(buffer[key][1])
             for key in sorted_keys
