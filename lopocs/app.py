@@ -179,7 +179,7 @@ itowns_read_args = reqparse.RequestParser()
 itowns_read_args.add_argument('isleaf', type=int, required=False, default=0)
 
 
-@itowns_ns.route("/<resource>/r/<bbox_encoded>.bin")
+@itowns_ns.route("/<resource>/r/<bbox_encoded>.cin")
 class ItownsReadRoute(Resource):
 
     @itowns_ns.expect(itowns_read_args, validate=True)
