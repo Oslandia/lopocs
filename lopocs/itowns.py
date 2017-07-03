@@ -339,6 +339,12 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
     pcpatch_wkb = session.query(sql)[0][0]
     points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
     print('npoints', npoints)
+    # randomizing points here (ie: after patches have been merged) allow the client
+    # to display a fraction of the points and get a meaningful representation of the
+    # total.
+    # Without sorting/shuffling, displaying 30% of the points would result in
+    # displaying 30% of the patches.
+    np.random.shuffle(points)
     fields = points.dtype.fields.keys()
 
     if 'Red' in fields:
