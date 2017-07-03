@@ -28,7 +28,6 @@ POINT_QUERY = """
         from {session.table}
         where pc_intersects({session.column},
             st_geomfromtext('polygon (({poly}))', {session.srsid}))
-        and zavg && numrange({z1}::numeric, {z2}::numeric)
     ), ordered as (
         select
             pc_filterbetween(pc_range({session.column}, {start}, {count}), 'Z', {z1}, {z2}) as points
