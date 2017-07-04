@@ -6,7 +6,7 @@ from math import pow
 import numpy as np
 from flask import make_response, abort
 
-from .utils import read_uncompressed_patch, boundingbox_to_polygon
+from .utils import read_uncompressed_patch, boundingbox_to_diagonal
 from .database import Session
 
 
@@ -23,12 +23,12 @@ NODE_POINT_LIMIT = 20000
 POINT_QUERY = """
 select {last_select} from (
     select
-        pc_filterbetween(pc_range({session.column}, {start}, {count}), 'Z', {z1}, {z2}) as points
+        pc_range({session.column}, {start}, {count}) as points
     from (
         select points
         from {session.table}
-        where pc_intersects({session.column},
-            st_geomfromtext('polygon (({poly}))', {session.srsid}))
+        where pc_boundingdiagonalgeometry({session.column}) &&&
+            st_geomfromtext('linestringz ({diag})', {session.srsid})
     ) _
 ) _
 """
@@ -104,7 +104,7 @@ def compute_psize(lod):
 
 
 def get_numpoints(session, box, lod, patch_size):
-    poly = boundingbox_to_polygon([
+    diag = boundingbox_to_diagonal([
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
     ])
 
@@ -112,11 +112,7 @@ def get_numpoints(session, box, lod, patch_size):
     start = 1 + sum([compute_psize(l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
-    sql = POINT_QUERY.format(
-        z1=box.zmin, z2=box.zmax,
-        last_select='sum(pc_numpoints(points))',
-        **locals()
-    )
+    sql = POINT_QUERY.format(last_select='sum(pc_numpoints(points))', **locals())
 
     npoints = session.query(sql)[0][0]
     return npoints or 0
@@ -392,7 +388,7 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
 
 
 def sql_query(session, box, pcid, lod, isleaf):
-    poly = boundingbox_to_polygon([
+    diag = boundingbox_to_diagonal([
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
     ])
 
@@ -407,7 +403,5 @@ def sql_query(session, box, pcid, lod, isleaf):
         # we want all points left
         count = patch_size - start
 
-    sql = POINT_QUERY.format(z1=box.zmin, z2=box.zmax,
-                             last_select='pc_union(points)',
-                             **locals())
+    sql = POINT_QUERY.format(last_select='pc_union(points)', **locals())
     return sql

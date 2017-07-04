@@ -41,7 +41,8 @@ PDAL_PIPELINE = """
     }},
     {{
         "type": "filters.chipper",
-        "capacity": "{capacity}"
+        "capacity": "{capacity}",
+        "use_z": true
     }},
     {reproject}
     {{
@@ -327,10 +328,7 @@ def _load(filename, table, column, work_dir, server_url, capacity, usewith, srid
     if usewith == 'itowns':
         # we don't use revertmorton for itowns
         Session.execute("""
-            create index on {table} using gist(pc_envelopegeometry({column}));
-            alter table {table} add column zavg numrange;
-            update {table} set zavg = numrange(pc_patchmin({column}, 'Z'), pc_patchmax({column}, 'Z'));
-            create index on {table} using gist(zavg);
+            create index on {table} using gist(pc_boundingdiagonalgeometry({column}) gist_geometry_ops_nd);
         """.format(**locals()))
     else:
         Session.execute("""
