@@ -199,7 +199,7 @@ def get_child(parent, numchild):
             parent.zmin + half_size[2],
             parent.xmin + half_size[0],
             parent.ymin + half_size[1],
-            parent.zmin + 2 * half_size[2]
+            parent.zmax
         )
     elif numchild == 2:
         child = the_bbox(
@@ -207,7 +207,7 @@ def get_child(parent, numchild):
             parent.ymin + half_size[1],
             parent.zmin,
             parent.xmin + half_size[0],
-            parent.ymin + 2 * half_size[1],
+            parent.ymax,
             parent.zmin + half_size[2]
         )
     elif numchild == 3:
@@ -216,15 +216,15 @@ def get_child(parent, numchild):
             parent.ymin + half_size[1],
             parent.zmin + half_size[2],
             parent.xmin + half_size[0],
-            parent.ymin + 2 * half_size[1],
-            parent.zmin + 2 * half_size[2]
+            parent.ymax,
+            parent.zmax
         )
     elif numchild == 4:
         child = the_bbox(
             parent.xmin + half_size[0],
             parent.ymin,
             parent.zmin,
-            parent.xmin + 2 * half_size[0],
+            parent.xmax,
             parent.ymin + half_size[1],
             parent.zmin + half_size[2]
         )
@@ -233,17 +233,17 @@ def get_child(parent, numchild):
             parent.xmin + half_size[0],
             parent.ymin,
             parent.zmin + half_size[2],
-            parent.xmin + 2 * half_size[0],
+            parent.xmax,
             parent.ymin + half_size[1],
-            parent.zmin + 2 * half_size[2]
+            parent.zmax
         )
     elif numchild == 6:
         child = the_bbox(
             parent.xmin + half_size[0],
             parent.ymin + half_size[1],
             parent.zmin,
-            parent.xmin + 2 * half_size[0],
-            parent.ymin + 2 * half_size[1],
+            parent.xmax,
+            parent.ymax,
             parent.zmin + half_size[2]
         )
     elif numchild == 7:
