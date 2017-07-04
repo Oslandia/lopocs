@@ -75,6 +75,17 @@ where
 group by pl.id, pl.bbox
 """
 
+POINT_COUNT_ESTIMATE = """
+select
+    reltuples::bigint * (
+        select pc_numpoints({column})
+        from "{schema}"."{table}"
+        limit 1
+    )
+from pg_class c
+where oid = '{schema}.{table}'::regclass;
+"""
+
 
 class LopocsException(Exception):
     pass
@@ -105,11 +116,12 @@ class LopocsTable():
     """
     __slots__ = (
         'table', 'column', 'srid', 'pcid', 'outputs',
-        'max_patches_per_query', 'max_points_per_patch', 'bbox'
+        'max_patches_per_query', 'max_points_per_patch',
+        'bbox', 'nbpoints'
     )
 
     def __init__(self, table, column, srid, pcid, outputs,
-                 max_patches_per_query, max_points_per_patch, bbox):
+                 max_patches_per_query, max_points_per_patch, bbox, nbpoints):
         self.table = table
         self.column = column
         self.outputs = outputs
@@ -118,6 +130,7 @@ class LopocsTable():
         self.max_patches_per_query = max_patches_per_query
         self.max_points_per_patch = max_points_per_patch
         self.bbox = bbox
+        self.nbpoints = nbpoints
 
     def filter_stored_output(self):
         '''
@@ -142,6 +155,7 @@ class LopocsTable():
             'max_patches_per_query': self.max_patches_per_query,
             'max_points_per_patch': self.max_points_per_patch,
             'bbox': self.bbox,
+            'nbpoints': self.nbpoints,
         }
 
 
@@ -167,18 +181,21 @@ class Session():
         Get all output tables and fill the catalog
         Each output table should have :
 
-
         """
         keys = ('pcid', 'scales', 'offsets', 'point_schema', 'bbox', 'stored')
         results = cls.query(LOPOCS_OUTPUTS_QUERY)
         for res in results:
+            schema, table = res[0].split('.')
+            npboints = cls.query(POINT_COUNT_ESTIMATE.format(
+                schema=schema, table=table, column=res[1]
+            ))[0][0]
             cls.catalog[(res[0], res[1])] = LopocsTable(
                 res[0], res[1], res[2], res[3],
                 [
                     dict(zip(keys, values))
                     for values in zip(res[4], res[5], res[6], res[7], res[8], res[9])
                 ],
-                res[10], res[11], res[12]
+                res[10], res[11], res[12], npboints
             )
 
     @classmethod
