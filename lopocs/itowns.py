@@ -81,9 +81,7 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
     session = Session(table, column)
 
     bbox_encoded = bbox_encoded.strip('r.')
-    # print(bbox_encoded)
     lod = len(bbox_encoded)
-    # print('lod', lod)
     box = decode_bbox(session, bbox_encoded)
 
     patch_size = session.patch_size
@@ -95,6 +93,7 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
     response.headers['content-type'] = 'application/octet-stream'
     response.headers['Last-Modified'] = last_modified
     return response
+
 
 def compute_psize(lod):
     # TODO: lod_size_threshold should depend on total point count
@@ -108,6 +107,7 @@ def compute_psize(lod):
     # with very few points.
     return int(pow(8, lod - 1))
 
+
 def get_numpoints(session, box, lod, patch_size):
     poly = boundingbox_to_polygon([
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
@@ -116,11 +116,6 @@ def get_numpoints(session, box, lod, patch_size):
     psize = compute_psize(lod)
     start = 1 + sum([compute_psize(l) for l in range(lod)])
     count = min(psize, patch_size - start)
-
-    sql_limit = ''
-    maxppq = NODE_POINT_LIMIT / count
-    # if maxppq:
-        # sql_limit = " limit {0} ".format(maxppq)
 
     sql = POINT_QUERY.format(
         z1=box.zmin, z2=box.zmax,
@@ -372,8 +367,6 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
         rgb_reduced = np.zeros((npoints, 3), dtype=int)
         rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
 
-    # print(box)
-
     quantized_points_r = np.c_[
         (points['X'] * scales[0] + offsets[0]) - box.xmin,
         (points['Y'] * scales[1] + offsets[1]) - box.ymin,
@@ -415,18 +408,9 @@ def sql_query(session, box, pcid, lod, isleaf):
     start = 1 + sum([compute_psize(l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
-    # print('patch_size', patch_size)
-    # print('psize', psize)
-    # print('start', start)
-    # print('count', count)
     if isleaf:
         # we want all points left
         count = patch_size - start
-
-    sql_limit = ""
-    # maxppq = NODE_POINT_LIMIT / count
-    # if maxppq and not isleaf:
-        # sql_limit = " limit {0} ".format(maxppq)
 
     sql = POINT_QUERY.format(z1=box.zmin, z2=box.zmax,
                              last_select='pc_union(points)',
