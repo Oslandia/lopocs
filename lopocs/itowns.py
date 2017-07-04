@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from struct import Struct
 from collections import namedtuple
-from math import pow
+from math import pow, log
 
 import numpy as np
 from flask import make_response, abort
@@ -14,10 +14,7 @@ the_bbox = namedtuple('bbox', ['xmin', 'ymin', 'zmin', 'xmax', 'ymax', 'zmax'])
 binfloat = Struct('I')
 binchar = Struct('B')
 
-LOD_MIN = 0
-LOD_MAX = 10
-LOD_LEN = LOD_MAX + 1 - LOD_MIN
-
+SKIP_LOD_POINT_LIMIT = 60000
 NODE_POINT_LIMIT = 20000
 
 POINT_QUERY = """
@@ -36,6 +33,20 @@ select {last_select} from (
 """
 
 
+def prepare_session_lod_threshold(session):
+      # for low lod patch_count = pointcount since we select 1 point per patch
+    patch_count = session.lopocstable.nbpoints / session.patch_size
+    if patch_count < SKIP_LOD_POINT_LIMIT:
+        session.psize_threshold1 = -1
+    else:
+        session.psize_threshold1 = int(round(log(patch_count / SKIP_LOD_POINT_LIMIT, 8)))
+
+    if patch_count < NODE_POINT_LIMIT:
+        session.psize_threshold2 = -1
+    else:
+        session.psize_threshold2 = int(round(log(patch_count / NODE_POINT_LIMIT, 8)))
+
+
 def ItownsRead(table, column, bbox_encoded, isleaf, last_modified):
 
     session = Session(table, column)
@@ -48,6 +59,9 @@ def ItownsRead(table, column, bbox_encoded, isleaf, last_modified):
     pcid = stored_patches['pcid']
     scales = stored_patches['scales']
     offsets = stored_patches['offsets']
+
+    prepare_session_lod_threshold(session)
+
     try:
         tile = get_points(
             session,
@@ -77,6 +91,8 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
     """
     session = Session(table, column)
 
+    prepare_session_lod_threshold(session)
+
     bbox_encoded = bbox_encoded.strip('r.')
     lod = len(bbox_encoded)
     box = decode_bbox(session, bbox_encoded)
@@ -92,17 +108,19 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
     return response
 
 
-def compute_psize(lod):
-    # TODO: lod_size_threshold should depend on total point count
-    lod_size_threshold = 2
+def compute_psize(session, lod):
+    # If there's too many patch that would be selected: skip this level
+    if lod <= session.psize_threshold1:
+        return 0
 
     # If we expect to receive a lot of patches, we only return 1 point per patch
-    if lod < lod_size_threshold:
+    if lod <= session.psize_threshold2:
         return 1
+
     # As soon as the patch count lowers, we want to return more and more points
     # because a constant point cound per patch would lead to "shallow" nodes,
     # with very few points.
-    return int(pow(8, lod - 1))
+    return int(pow(8, lod - ((session.psize_threshold2 + 1) if session.psize_threshold2 >= 0 else 0)))
 
 
 def get_numpoints(session, box, lod, patch_size):
@@ -110,8 +128,13 @@ def get_numpoints(session, box, lod, patch_size):
         box.xmin, box.ymin, box.zmin, box.xmax, box.ymax, box.zmax
     ])
 
-    psize = compute_psize(lod)
-    start = 1 + sum([compute_psize(l) for l in range(lod)])
+    psize = compute_psize(session, lod)
+
+    if psize is 0:
+        # special value...
+        return -1
+
+    start = 1 + sum([compute_psize(session, l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
     sql = POINT_QUERY.format(
@@ -119,11 +142,11 @@ def get_numpoints(session, box, lod, patch_size):
         last_select='sum(pc_numpoints(points))', **locals())
 
     npoints = session.query(sql)[0][0]
-    return npoints or 0
+    return (npoints or 0)
 
 
 def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', buffer=None):
-    psize = compute_psize(lod)
+    psize = compute_psize(session, lod)
 
     if buffer is None:
         buffer = {}
@@ -131,13 +154,18 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
     # root
     bitarray = ['0'] * 8
 
-    # estimate the number of patches
-    npatches = npoints / psize
+    estimate_total = NODE_POINT_LIMIT
 
-    # how many points would a isleaf=1 request return for this bbox
-    points_used_in_previous_lod = npatches * sum([compute_psize(l) for l in range(lod)])
+    npoints = 0 if npoints < 0 else npoints
 
-    estimate_total = npatches * patch_size - points_used_in_previous_lod
+    if psize:
+        # estimate the number of patches
+        npatches = npoints / psize
+
+        # how many points would a isleaf=1 request return for this bbox
+        points_used_in_previous_lod = npatches * sum([compute_psize(session, l) for l in range(lod)])
+
+        estimate_total = npatches * patch_size - points_used_in_previous_lod
 
     # can we stop subviding?
     if estimate_total < NODE_POINT_LIMIT:
@@ -147,7 +175,7 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
             cbox = get_child(box, child)
             cnpoints = get_numpoints(session, cbox, lod + 1, patch_size)
 
-            if cnpoints > 0:
+            if cnpoints != 0:
                 bitarray[child] = '1'
                 if depth < depth_max:
                     octree(session, depth + 1, depth_max, cbox, cnpoints, lod + 1, patch_size, name + str(child), buffer)
@@ -161,9 +189,9 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
             if len(k) > 0:
                 children_count = sum(map(lambda x: int(x), buffer[k][0]))
                 if children_count:
-                    print('{}├── \033[30;34m{}\033[0m {} -> {}'.format('│   ' * (len(k) - 1), k, buffer[k][1], ''.join(buffer[k][0])[::-1]))
+                    print('{}├── \033[30;34m{}\033[0m {} psize={} -> {}'.format('│   ' * (len(k) - 1), k, buffer[k][1], compute_psize(session, len(k)), ''.join(buffer[k][0])[::-1]))
                 else:
-                    print('{}├── \033[30;34m{}\033[0m {}'.format('│   ' * (len(k) - 1), k, buffer[k][1]))
+                    print('{}├── \033[30;34m{}\033[0m {} psize={}'.format('│   ' * (len(k) - 1), k, buffer[k][1], compute_psize(session, len(k))))
             else:
                 print('\033[30;34m{}\033[0m {}'.format('X', buffer[k][1]))
 
@@ -399,8 +427,8 @@ def sql_query(session, box, pcid, lod, isleaf):
     maxppp = session.lopocstable.max_points_per_patch
     patch_size = session.patch_size
 
-    psize = compute_psize(lod)
-    start = 1 + sum([compute_psize(l) for l in range(lod)])
+    psize = compute_psize(session, lod)
+    start = 1 + sum([compute_psize(session, l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
     if isleaf:
