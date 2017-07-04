@@ -24,11 +24,8 @@ POINT_QUERY = """
 select {last_select} from (
     select
         pc_filterbetween(pc_range({session.column}, {start}, {count}), 'Z', {z1}, {z2}) as points
-        , rand
     from (
-        select
-            points
-            , random() as rand
+        select points
         from {session.table}
         where pc_intersects({session.column},
             st_geomfromtext('polygon (({poly}))', {session.srsid}))
@@ -411,6 +408,6 @@ def sql_query(session, box, pcid, lod, isleaf):
         count = patch_size - start
 
     sql = POINT_QUERY.format(z1=box.zmin, z2=box.zmax,
-                             last_select='pc_union(points order by rand)',
+                             last_select='pc_union(points)',
                              **locals())
     return sql
