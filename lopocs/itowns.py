@@ -39,7 +39,7 @@ select {last_select} from (
 
 
 def prepare_session_lod_threshold(session):
-      # for low lod patch_count = pointcount since we select 1 point per patch
+    # for low lod patch_count = pointcount since we select 1 point per patch
     patch_count = session.lopocstable.nbpoints / session.patch_size
     if patch_count < SKIP_LOD_POINT_LIMIT:
         session.psize_threshold1 = -1
@@ -125,7 +125,8 @@ def compute_psize(session, lod):
     # As soon as the patch count lowers, we want to return more and more points
     # because a constant point cound per patch would lead to "shallow" nodes,
     # with very few points.
-    return int(pow(8, lod - ((session.psize_threshold2 + 1) if session.psize_threshold2 >= 0 else 0)))
+    power = lod - ((session.psize_threshold2 + 1) if session.psize_threshold2 >= 0 else 0)
+    return int(pow(8, power))
 
 
 def get_numpoints(session, box, lod, patch_size):
@@ -185,7 +186,8 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
             if cnpoints != 0:
                 bitarray[child] = '1'
                 if depth < depth_max:
-                    octree(session, depth + 1, depth_max, cbox, cnpoints, lod + 1, patch_size, name + str(child), buffer)
+                    octree(session, depth + 1, depth_max, cbox, cnpoints, lod + 1, patch_size,
+                           name + str(child), buffer)
 
         buffer[name] = [bitarray, npoints]
 
@@ -196,9 +198,13 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
             if len(k) > 0:
                 children_count = sum(map(lambda x: int(x), buffer[k][0]))
                 if children_count:
-                    print('{}├── \033[30;34m{}\033[0m {} psize={} -> {}'.format('│   ' * (len(k) - 1), k, buffer[k][1], compute_psize(session, len(k)), ''.join(buffer[k][0])[::-1]))
+                    print('{}├── \033[30;34m{}\033[0m {} psize={} -> {}'.format(
+                        '│   ' * (len(k) - 1), k, buffer[k][1],
+                        compute_psize(session, len(k)), ''.join(buffer[k][0])[::-1]))
                 else:
-                    print('{}├── \033[30;34m{}\033[0m {} psize={}'.format('│   ' * (len(k) - 1), k, buffer[k][1], compute_psize(session, len(k))))
+                    print('{}├── \033[30;34m{}\033[0m {} psize={}'.format(
+                        '│   ' * (len(k) - 1), k, buffer[k][1],
+                        compute_psize(session, len(k))))
             else:
                 print('\033[30;34m{}\033[0m {}'.format('X', buffer[k][1]))
 
@@ -385,7 +391,10 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
     if 'Red' in fields:
         if max(points['Red']) > 255:
             # normalize
-            rgb_reduced = np.c_[points['Red'] % 255, points['Green'] % 255, points['Blue'] % 255, np.ones(npoints) * 255]
+            rgb_reduced = np.c_[points['Red'] % 255,
+                                points['Green'] % 255,
+                                points['Blue'] % 255,
+                                np.ones(npoints) * 255]
             rgb = np.array(np.core.records.fromarrays(rgb_reduced.T, dtype=cdt))
         else:
             rgb = points[['Red', 'Green', 'Blue']].astype(cdt)
