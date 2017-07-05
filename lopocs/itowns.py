@@ -21,7 +21,12 @@ POINT_QUERY = """
 select {last_select} from (
     select
         pc_filterbetween(
-            pc_range({session.column}, {start}, {count}), 'z', {z1}, {z2}
+            pc_filterbetween(
+                pc_filterbetween(
+                    pc_range({session.column}, {start}, {count}),
+                    'z', {z1}, {z2}
+                ), 'y', {y1}, {y2}
+            ), 'x', {x1}, {x2}
         ) as points
     from (
         select points
@@ -138,6 +143,8 @@ def get_numpoints(session, box, lod, patch_size):
     count = min(psize, patch_size - start)
 
     sql = POINT_QUERY.format(
+        x1=box.xmin, x2=box.xmax,
+        y1=box.ymin, y2=box.ymax,
         z1=box.zmin, z2=box.zmax,
         last_select='sum(pc_numpoints(points))', **locals())
 
@@ -436,6 +443,8 @@ def sql_query(session, box, pcid, lod, isleaf):
         count = patch_size - start
 
     sql = POINT_QUERY.format(
+        x1=box.xmin, x2=box.xmax,
+        y1=box.ymin, y2=box.ymax,
         z1=box.zmin, z2=box.zmax,
         last_select='pc_union(points)', **locals())
     return sql
