@@ -23,7 +23,9 @@ NODE_POINT_LIMIT = 20000
 POINT_QUERY = """
 select {last_select} from (
     select
-        pc_range({session.column}, {start}, {count}) as points
+        pc_filterbetween(
+            pc_range({session.column}, {start}, {count}), 'z', {z1}, {z2}
+        ) as points
     from (
         select points
         from {session.table}
@@ -112,7 +114,9 @@ def get_numpoints(session, box, lod, patch_size):
     start = 1 + sum([compute_psize(l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
-    sql = POINT_QUERY.format(last_select='sum(pc_numpoints(points))', **locals())
+    sql = POINT_QUERY.format(
+        z1=box.zmin, z2=box.zmax,
+        last_select='sum(pc_numpoints(points))', **locals())
 
     npoints = session.query(sql)[0][0]
     return npoints or 0
@@ -403,5 +407,7 @@ def sql_query(session, box, pcid, lod, isleaf):
         # we want all points left
         count = patch_size - start
 
-    sql = POINT_QUERY.format(last_select='pc_union(points)', **locals())
+    sql = POINT_QUERY.format(
+        z1=box.zmin, z2=box.zmax,
+        last_select='pc_union(points)', **locals())
     return sql
