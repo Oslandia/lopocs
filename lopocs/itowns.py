@@ -171,7 +171,7 @@ def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', bu
         npatches = npoints / psize
 
         # how many points would a isleaf=1 request return for this bbox
-        points_used_in_previous_lod = npatches * sum([compute_psize(session, l) for l in range(lod)])
+        points_used_in_previous_lod = npatches * sum(compute_psize(session, l) for l in range(lod))
 
         estimate_total = npatches * patch_size - points_used_in_previous_lod
 
