@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import math
+import array
 from struct import pack, unpack
 from binascii import unhexlify
 import os
@@ -47,11 +48,9 @@ def read_uncompressed_patch(pcpatch_wkb, schema):
     pointdata[]:  interpret relative to pcid
     '''
     patchbin = unhexlify(pcpatch_wkb)
-    npoints = unpack("I", patchbin[9:13])[0]
+    npoints = array.array("I", patchbin[9:13])[0]
     dt = schema_dtype(schema)
     patch = np.fromstring(patchbin[13:], dtype=dt)
-    # debug
-    # print(patch[:10])
     return patch, npoints
 
 
