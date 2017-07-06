@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+import traceback
 from struct import Struct
 from collections import namedtuple
 from math import pow, log
 
 import numpy as np
+
 from flask import make_response, abort
 
 from .utils import read_uncompressed_patch, boundingbox_to_diagonal
@@ -14,19 +16,39 @@ the_bbox = namedtuple('bbox', ['xmin', 'ymin', 'zmin', 'xmax', 'ymax', 'zmax'])
 binfloat = Struct('I')
 binchar = Struct('B')
 
+# structured array type for colors
+cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8), ('Alpha', np.uint8)])
+# structured array type for positions
+pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
+
+
 SKIP_LOD_POINT_LIMIT = 60000
 NODE_POINT_LIMIT = 20000
 
 POINT_QUERY = """
-select {last_select} from (
+select pc_union(points) from (
+    select
+        pc_range({session.column}, {start}, {count}) as points
+    from (
+        select points
+        from {session.table}
+        where pc_boundingdiagonalgeometry({session.column}) &&&
+            st_geomfromtext('linestringz ({diag})', {session.srsid})
+    ) _
+) _
+"""
+
+HIERARCHY_QUERY = """
+select sum(pc_numpoints(points))
+from (
     select
         pc_filterbetween(
-            pc_filterbetween(
                 pc_filterbetween(
-                    pc_range({session.column}, {start}, {count}),
-                    'z', {z1}, {z2}
-                ), 'y', {y1}, {y2}
-            ), 'x', {x1}, {x2}
+                    pc_filterbetween(
+                        pc_range({session.column}, {start}, {count})
+                        , 'z', {z1}, {z2}
+                    ), 'y', {y1}, {y2}
+                ), 'x', {x1}, {x2}
         ) as points
     from (
         select points
@@ -79,6 +101,7 @@ def ItownsRead(table, column, bbox_encoded, isleaf, last_modified):
             isleaf
         )
     except TypeError:
+        print(traceback.print_exc())
         return abort(404)
 
     # build flask response
@@ -95,7 +118,6 @@ def ItownsHrc(table, column, bbox_encoded, last_modified):
 
     """
     session = Session(table, column)
-
     prepare_session_lod_threshold(session)
 
     bbox_encoded = bbox_encoded.strip('r.')
@@ -143,14 +165,13 @@ def get_numpoints(session, box, lod, patch_size):
     start = 1 + sum([compute_psize(session, l) for l in range(lod)])
     count = min(psize, patch_size - start)
 
-    sql = POINT_QUERY.format(
+    sql = HIERARCHY_QUERY.format(
         x1=box.xmin, x2=box.xmax,
         y1=box.ymin, y2=box.ymax,
         z1=box.zmin, z2=box.zmax,
-        last_select='sum(pc_numpoints(points))', **locals())
+        **locals())
 
-    npoints = session.query(sql)[0][0]
-    return (npoints or 0)
+    return session.query(sql)[0][0] or 0
 
 
 def octree(session, depth, depth_max, box, npoints, lod, patch_size, name='', buffer=None):
@@ -314,7 +335,6 @@ def decode_bbox(session, bbox):
     for numchild in [int(l) for l in bbox]:
         root = get_child(root, numchild)
 
-    # print('level', level, 'zdiff', root.zmax - root.zmin)
     return root
 
 
@@ -370,8 +390,33 @@ def classification_to_rgb(points):
     return rgb
 
 
-cdt = np.dtype([('Red', np.uint8), ('Green', np.uint8), ('Blue', np.uint8), ('Alpha', np.uint8)])
-pdt = np.dtype([('X', np.float32), ('Y', np.float32), ('Z', np.float32)])
+def filter_on_xyz(points, box):
+    """
+    returns a new array with points outside the
+    box removed
+    """
+    return points[
+        (points['X'] > box.xmin) &
+        (points['X'] < box.xmax) &
+        (points['Y'] > box.ymin) &
+        (points['Y'] < box.ymax) &
+        (points['Z'] > box.zmin) &
+        (points['Z'] < box.zmax)
+    ]
+
+
+def box_reduced(box, scales, offsets):
+    """
+    returns the bbox with scales/offsets applied
+    """
+    return the_bbox(
+        (box.xmin - offsets[0]) / scales[0],
+        (box.ymin - offsets[1]) / scales[1],
+        (box.zmin - offsets[2]) / scales[2],
+        (box.xmax - offsets[0]) / scales[0],
+        (box.ymax - offsets[1]) / scales[1],
+        (box.zmax - offsets[2]) / scales[2]
+    )
 
 
 def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
@@ -379,13 +424,17 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
 
     pcpatch_wkb = session.query(sql)[0][0]
     points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
-    print('npoints', npoints)
+
     # randomizing points here (ie: after patches have been merged) allow the client
     # to display a fraction of the points and get a meaningful representation of the
     # total.
     # Without sorting/shuffling, displaying 30% of the points would result in
     # displaying 30% of the patches.
     np.random.shuffle(points)
+
+    # remove points outside the bounding box
+    points = filter_on_xyz(points, box_reduced(box, scales, offsets))
+
     fields = points.dtype.fields.keys()
 
     if 'Red' in fields:
@@ -455,5 +504,5 @@ def sql_query(session, box, pcid, lod, isleaf):
         x1=box.xmin, x2=box.xmax,
         y1=box.ymin, y2=box.ymax,
         z1=box.zmin, z2=box.zmax,
-        last_select='pc_union(points)', **locals())
+        **locals())
     return sql
