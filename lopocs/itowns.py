@@ -423,7 +423,7 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
     sql = sql_query(session, box, pcid, lod, isleaf)
 
     pcpatch_wkb = session.query(sql)[0][0]
-    points, npoints = read_uncompressed_patch(pcpatch_wkb, schema)
+    points, _ = read_uncompressed_patch(pcpatch_wkb, schema)
 
     # randomizing points here (ie: after patches have been merged) allow the client
     # to display a fraction of the points and get a meaningful representation of the
@@ -434,6 +434,7 @@ def get_points(session, box, lod, offsets, pcid, scales, schema, isleaf):
 
     # remove points outside the bounding box
     points = filter_on_xyz(points, box_reduced(box, scales, offsets))
+    npoints = len(points)
 
     fields = points.dtype.fields.keys()
 
