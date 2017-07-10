@@ -19,7 +19,7 @@ requirements = (
     'pyyaml==3.12',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis==2.10.5',
-    'py3dtiles==0.0.9',
+    'py3dtiles==1.0.1',
     'click==6.7',
     'requests==2.13.0',
     'lazperf==0.1',
