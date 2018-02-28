@@ -8,7 +8,7 @@ from flask import make_response
 from py3dtiles.feature_table import (
     FeatureTableHeader, FeatureTableBody, FeatureTable
 )
-from py3dtiles.tile import TileBody, TileHeader, Tile
+from py3dtiles.pnts import PntsBody, PntsHeader, Pnts
 
 from .utils import (
     read_uncompressed_patch, boundingbox_to_polygon, list_from_str, patch_numpoints
@@ -167,10 +167,10 @@ def get_points(session, box, lod, offsets, pcid, scales, schema):
     ft.body = ftb
 
     # tile
-    tb = TileBody()
+    tb = PntsBody()
     tb.feature_table = ft
-    th = TileHeader()
-    tile = Tile()
+    th = PntsHeader()
+    tile = Pnts()
     tile.body = tb
     tile.header = th
     tile.body.feature_table.header.rtc = offsets
