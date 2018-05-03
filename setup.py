@@ -15,7 +15,7 @@ requirements = (
     'flask>=0.12',
     'flask-restplus==0.10.1',
     'flask-cors==3.0.2',
-    'psycopg2>=2.6.2',
+    'psycopg2-binary>=2.6.2',
     'pyyaml==3.12',
     'pygdal >= {0}, <{1}'.format(GDAL_MIN, GDAL_MAX),
     'redis==2.10.5',
