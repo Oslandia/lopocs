@@ -72,7 +72,7 @@ From sources
     $ cd lopocs
     $ virtualenv -p /usr/bin/python3 venv
     $ source venv/bin/activate
-    (venv)$ pip install numpy
+    (venv)$ pip install 'numpy==1.14.3'
     (venv)$ pip install -e .
 
 Configuration
