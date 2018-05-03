@@ -57,11 +57,11 @@ Dependencies
   - gdal development headers (libgdal-dev)
   - pip (python3-pip)
   - virtualenv (python3-virtualenv)
-  - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_
+  - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_ with lazperf enabled
   - `Morton Postgres extension <https://github.com/Oslandia/pgmorton>`_
-  - `PDAL <https://github.com/pblottiere/PDAL/>`_ (if using lopocs loader)
+  - `PDAL <https://github.com/PDAL/PDAL/>`_ (used by the LOPoCS loader)
 
-.. note:: The PDAL fork contains a new revert_morton plugin in the lopocs branch that orders points according to the revert Morton algorithm. The plugin is not installed by default, you will need to activate its installation flag via CMake.
+.. note:: The LOPoCS loader uses PDAL's "mortonorder" filter in "reverse" mode. The "reverse" mode was introduced in PDAL version 1.7.1, so make sure you use this version or higher.
 
 From sources
 ------------
@@ -72,7 +72,7 @@ From sources
     $ cd lopocs
     $ virtualenv -p /usr/bin/python3 venv
     $ source venv/bin/activate
-    (venv)$ pip install numpy
+    (venv)$ pip install 'numpy==1.14.3'
     (venv)$ pip install -e .
 
 Configuration
@@ -118,7 +118,6 @@ Check installation
     (venv)$ lopocs check
     Pdal ... 1.4.0
     Pdal plugin pgpointcloud ... ok
-    Pdal plugin revertmorton ... ok
     PostgreSQL ... 9.6.3
     PostGIS extension ... 2.3.1
     PgPointcloud extension ... 1.1.0
