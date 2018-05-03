@@ -22,7 +22,7 @@ requirements = (
     'py3dtiles==1.0.1',
     'click==6.7',
     'requests==2.13.0',
-    'lazperf==0.1',
+    'lazperf==1.2.1',
     'numpy',
     'pyproj==1.9.5.1'
 )
