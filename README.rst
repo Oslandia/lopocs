@@ -59,7 +59,9 @@ Dependencies
   - virtualenv (python3-virtualenv)
   - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_
   - `Morton Postgres extension <https://github.com/Oslandia/pgmorton>`_
-  - `PDAL <https://github.com/PDAL/PDAL/>`_ (if using lopocs loader)
+  - `PDAL <https://github.com/PDAL/PDAL/>`_ (used by the LOPoCS loader)
+
+.. note:: The LOPoCS loader uses PDAL's "mortonorder" filter in "reverse" mode. The "reverse" mode was introduced in PDAL version 1.7.1, so make sure you use this version or higher.
 
 From sources
 ------------
