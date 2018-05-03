@@ -57,7 +57,7 @@ Dependencies
   - gdal development headers (libgdal-dev)
   - pip (python3-pip)
   - virtualenv (python3-virtualenv)
-  - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_
+  - `pgpointcloud <https://github.com/pgpointcloud/pointcloud>`_ with lazperf enabled
   - `Morton Postgres extension <https://github.com/Oslandia/pgmorton>`_
   - `PDAL <https://github.com/PDAL/PDAL/>`_ (used by the LOPoCS loader)
 
