@@ -44,7 +44,8 @@ PDAL_PIPELINE = """
     }},
     {reproject}
     {{
-        "type": "filters.revertmorton"
+        "type": "filters.mortonorder",
+        "reverse": "true"
     }},
     {{
         "type":"writers.pgpointcloud",
@@ -188,7 +189,6 @@ def check():
     # pdal
     cmd_output('Pdal', 'pdal-config --version')
     cmd_rt('Pdal plugin pgpointcloud', "test -e `pdal-config --plugin-dir`/libpdal_plugin_writer_pgpointcloud.so")
-    cmd_rt('Pdal plugin revertmorton', "test -e `pdal-config --plugin-dir`/libpdal_plugin_filter_revertmorton.so")
 
     # postgresql and extensions
     cmd_pg('PostgreSQL', 'show server_version')
