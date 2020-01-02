@@ -6,6 +6,7 @@ from pathlib import Path
 
 from flask import Flask, Blueprint
 from yaml import load as yload
+from yaml import FullLoader
 
 from lopocs.app import api
 from lopocs.database import Session
@@ -21,7 +22,7 @@ def load_yaml_config(filename):
     Open Yaml file, load content for flask config and returns it as a python dict
     """
     content = io.open(filename, 'r').read()
-    return yload(content).get('flask', {})
+    return yload(content, Loader=FullLoader).get('flask', {})
 
 
 def create_app(env='Defaults'):
