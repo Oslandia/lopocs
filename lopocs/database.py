@@ -2,6 +2,7 @@
 from multiprocessing import cpu_count
 from collections import defaultdict
 from contextlib import contextmanager
+from packaging import version
 
 import psycopg2.extras
 import psycopg2.extensions
@@ -315,8 +316,8 @@ class Session():
         stream patches in various formats
         '''
         # to_regclass function changed its signature in postgresql >= 9.6
-        version = cls.query('show server_version')[0][0]
-        if version < '9.6.0':
+        server_version = cls.query('show server_version')[0][0].split()[0]
+        if version.parse(server_version) < version.parse('9.6.0'):
             cls.execute("""
                 create or replace function to_regclass(text) returns regclass
                 language sql as 'select to_regclass($1::cstring)'
