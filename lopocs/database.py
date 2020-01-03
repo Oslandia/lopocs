@@ -2,6 +2,7 @@
 from multiprocessing import cpu_count
 from collections import defaultdict
 from contextlib import contextmanager
+from packaging import version
 
 import psycopg2.extras
 import psycopg2.extensions
@@ -313,10 +314,16 @@ class Session():
         '''
         Create some meta tables that stores informations used by lopocs to
         stream patches in various formats
+
+        This function uses "packaging.version.parse" to evaluate the current
+        postgres version; depending on the system, it may returns verbose
+        answers like "X.X.X (Ubuntu X.X-Xubuntu0.18.04.1)". One has to split
+        this to keep only the simple version format.
         '''
         # to_regclass function changed its signature in postgresql >= 9.6
-        version = cls.query('show server_version')[0][0]
-        if version < '9.6.0':
+        full_server_version = cls.query('show server_version')[0][0]
+        server_version = server_version_full.split()[0]  # Keep only "X.X.X"
+        if version.parse(server_version) < version.parse('9.6.0'):
             cls.execute("""
                 create or replace function to_regclass(text) returns regclass
                 language sql as 'select to_regclass($1::cstring)'
